@@ -1,0 +1,35 @@
+# Environments & Cache
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+ENV/
+
+# Secrets & Local Config
+.env
+.env.local
+*.pem
+*.key
+
+# Data & Database
+*.db
+*.sqlite3
+tracetwin.db
+
+# OS Artifacts
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE & Editor Configs
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Node / Frontend Artifacts
+node_modules/
+dist/
+build/
