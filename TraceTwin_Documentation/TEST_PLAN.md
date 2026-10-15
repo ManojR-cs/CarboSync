@@ -46,7 +46,7 @@
 
 | Test ID | Test Title & Preconditions | Input Data | Expected Result | Status | Actual Result |
 | :---: | :--- | :--- | :--- | :---: | :--- |
-| **T-DET-01** | **Standard Vehicle Class Mapping**<br>*Precondition:* YOLOv8n model loaded in memory. | Test parking photo containing 10 cars, 4 motorcycles, and 1 bus. | Model identifies objects; extracts normalized boxes; maps to `Cars`, `Motorcycles and scooters`, `Buses and campus shuttles`. | `Planned` | *Pending live test execution* |
+| **T-DET-01** | **Standard Vehicle Class Mapping**<br>*Precondition:* YOLO11n model loaded in memory. | Test parking photo containing 10 cars, 4 motorcycles, and 1 bus. | Model identifies objects (`conf=0.35`); extracts normalized boxes; maps COCO classes (1, 2, 3, 5, 7); generates OpenCV annotated plot. | `Planned` | *Pending live test execution* |
 | **T-DET-02** | **Low-Confidence Filtering**<br>*Precondition:* Model confidence threshold set to 0.35. | Image with distant background clutter or blurry shadows. | Detections with confidence $< 0.35$ are suppressed from initial canvas rendering. | `Planned` | *Pending live test execution* |
 | **T-DET-03** | **Zero Detection Handling**<br>*Precondition:* Model loaded. | Photo of an empty paved parking lot with 0 vehicles. | Inference completes (HTTP 200); returns 0 boxes; alert: "0 vehicles detected. You may add boxes manually." | `Planned` | *Pending live test execution* |
 

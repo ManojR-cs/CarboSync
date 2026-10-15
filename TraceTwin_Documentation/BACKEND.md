@@ -14,7 +14,7 @@ The backend of **TraceTwin** acts as the central computational, data governance,
 
 ### Core Objectives:
 1. **Deterministic Authority:** The backend owns 100% of numerical calculations. All baseline emissions and scenario projections are calculated via strictly typed, side-effect-free Python functions. The AI model is strictly prohibited from computing or altering numerical figures.
-2. **Local CPU Inference Efficiency:** Host and execute Ultralytics YOLOv8 Nano (`yolov8n.pt`) on local CPU with sub-3.5-second inference latency on standard $1920 \times 1080$ images without GPU dependencies.
+2. **Local CPU Inference Efficiency:** Host and execute Ultralytics YOLO11 Nano (`yolo11n.pt`) on local CPU with sub-3.5-second inference latency on standard $1920 \times 1080$ images without GPU dependencies.
 3. **Strict Data Minimization & Privacy:** Enforce zero storage of Personally Identifiable Information (no student names, IDs, exact residential addresses, or raw attendance tables) in the local SQLite database.
 4. **Resilient AI Guardrails with Automatic Fallback:** Wrap external Generative AI API calls in a strict schema validator with a hard 4,000 ms timeout. Automatically serve deterministic, rule-based recommendations labeled `"Rule-based plan (AI unavailable)"` upon any API timeout, network drop, or schema failure.
 5. **Contract Governance:** Serve as the source of truth for the shared REST API contract, providing automated interactive OpenAPI documentation at `/docs`.
@@ -27,7 +27,7 @@ The backend of **TraceTwin** acts as the central computational, data governance,
 - **Runtime:** Python 3.11.x (standard 64-bit Windows installation).
 - **Web Framework:** FastAPI (asynchronous route handlers, automated Pydantic schema validation).
 - **ASGI Server:** Uvicorn with single worker process (`uvicorn main:app --reload --port 8000`).
-- **Computer Vision:** Ultralytics YOLOv8 (`ultralytics` package running `yolov8n.pt` on PyTorch CPU).
+- **Computer Vision:** Ultralytics YOLO11 (`ultralytics` package running `yolo11n.pt` on PyTorch CPU) and OpenCV (`cv2`) for annotated image generation and image I/O.
 - **Data Persistence:** SQLite3 via standard library `sqlite3` or SQLAlchemy ORM (`tracetwin.db`).
 - **Data Validation:** Pydantic v2 models for all request bodies and response serialization.
 - **External HTTP Client:** `httpx` or `urllib` for asynchronous LLM API calls with timeout controls.
@@ -40,7 +40,7 @@ backend/
 ├── database.py             # SQLite connection, session factory, table initialization
 ├── models.py               # Database table schemas / ORM models
 ├── schemas.py              # Pydantic request and response schemas (API contract)
-├── cv_worker.py            # YOLOv8n loader, image validator, category mapper, box serializer
+├── cv_worker.py            # YOLO11n loader, image validator, category mapper, box serializer, OpenCV annotator
 ├── carbon_engine.py        # Pure Python deterministic VKT and tailpipe CO2 calculation formulas
 ├── scenario_engine.py      # Digital Twin scenario logic (remote days, carpool detour, shuttle fuel)
 ├── ai_guard.py             # LLM prompt builder, non-PII sanitizer, timeout gate, schema validator
@@ -61,7 +61,7 @@ The backend development roadmap is organized into 10 structured engineering task
 ```mermaid
 graph TD
     B01[B-01: FastAPI Scaffold & CORS] --> B02[B-02: SQLite Models & DB Setup]
-    B01 --> B03[B-03: YOLOv8n CV Inference Worker]
+    B01 --> B03[B-03: YOLO11n CV Inference Worker]
     B02 & B03 --> B04[B-04: Human Verification Handler]
     B01 --> B05[B-05: Deterministic Carbon Engine]
     B05 --> B06[B-06: Digital Twin Scenario Simulator]
@@ -89,19 +89,30 @@ graph TD
   - `scenario_runs` (`run_id`, `assessment_id`, `scenario_type`, `baseline_co2`, `scenario_co2`, `net_savings_co2`, `ai_recommendation_json`, `fallback_activated`).
 - **Privacy Enforcement:** Zero columns for student names, registration numbers, or individual street addresses.
 
-### Task B-03: Computer Vision Inference Worker (YOLOv8n CPU)
-- **Goal:** Load pretrained YOLOv8n model and process uploaded parking images into normalized bounding boxes.
+### Task B-03: Computer Vision Inference Worker (YOLO11n CPU & OpenCV Pipeline)
+- **Goal:** Load pretrained Ultralytics YOLO11 Nano model (`yolo11n.pt`) and process uploaded parking images into normalized bounding boxes, category summaries, and annotated visualization images.
+- **Technical Pipeline:**
+  ```python
+  # Core execution pattern
+  from ultralytics import YOLO
+  import cv2
+
+  model = YOLO("yolo11n.pt")  # Downloads automatically on first run
+  results = model.predict(source=image_path, conf=0.35, verbose=False)
+  ```
 - **Requirements:**
-  - Load `yolov8n.pt` into memory on application startup.
+  - Load `yolo11n.pt` into memory on application startup.
   - Input validation: Verify MIME type (`image/jpeg`, `image/png`), check file size ($\le 10\text{ MB}$).
-  - Filter raw COCO detections to TraceTwin categories:
-    - COCO `car` (class 2) $\rightarrow$ **Cars**
-    - COCO `motorcycle` (class 3) $\rightarrow$ **Motorcycles and scooters**
-    - COCO `bus` (class 5) $\rightarrow$ **Buses and campus shuttles**
-    - COCO `truck` (class 7) $\rightarrow$ **Other fuel-burning vehicles**
-  - Extract normalized bounding box coordinates $[x_{\min}, y_{\min}, x_{\max}, y_{\max}]$ and confidence score.
-  - Suppress detections with confidence $< 0.35$.
-  - Output summary count dictionary along with detection list.
+  - Supported COCO vehicle class mappings:
+    - `1`: `Bicycle` $\rightarrow$ Detected and logged in vehicle report; rendered on canvas as an active transport observation (excluded from fuel-burning tailpipe carbon emissions calculation).
+    - `2`: `Car` $\rightarrow$ Mapped to **Cars**.
+    - `3`: `Motorcycle` $\rightarrow$ Mapped to **Motorcycles and scooters**.
+    - `5`: `Bus` $\rightarrow$ Mapped to **Buses and campus shuttles**.
+    - `7`: `Truck` $\rightarrow$ Mapped to **Other fuel-burning vehicles, including auto-rickshaws** (manual canvas reclassification supported).
+  - Extract normalized bounding box coordinates $[x_{\min}, y_{\min}, x_{\max}, y_{\max}]$ and confidence score for interactive canvas rendering.
+  - Generate annotated plot via `annotated_image = results[0].plot()` and save locally via `cv2.imwrite("detected_vehicles.jpg", annotated_image)` for immediate visualization.
+  - Format summary count dictionary matching the CARBOSYNC report format:
+    `{"Bicycle": count, "Car": count, "Motorcycle": count, "Bus": count, "Truck": count, "Total": total}`.
 
 ### Task B-04: Human Verification & Snapshot Lock Handler
 - **Goal:** Endpoint to receive human-reviewed detection counts and update persistent database state.
@@ -327,7 +338,7 @@ graph TD
 
 Before declaring the backend ready for final demonstration:
 - [ ] `uvicorn main:app` launches cleanly with 0 console warnings or deprecation errors.
-- [ ] PyTorch CPU inference on `yolov8n.pt` completes in $< 3.5\text{ seconds}$ on a test image.
+- [ ] PyTorch CPU inference on `yolo11n.pt` completes in $< 3.5\text{ seconds}$ on a test image.
 - [ ] Hand-calculated benchmark cases (Benchmark 1: $45.000\text{ t } CO_2$; Benchmark 2: $38.480\text{ t } CO_2$) match the calculation engine output to 3 decimal places.
 - [ ] Input validator rejects negative distances, negative vehicle counts, and invalid file types with HTTP 422/400.
 - [ ] Shuttle scenario accurately computes added diesel fuel emissions and returns negative net savings if shuttle emissions exceed avoided car emissions.

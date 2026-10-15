@@ -25,7 +25,7 @@
 graph TD
     subgraph StreamA [Workstream A: Computer Vision & Review]
         RoleA[Lead: CV & Image Specialist]
-        TaskA[YOLOv8n CPU Pipeline<br>Class Mapping & Box Serialization]
+        TaskA[YOLO11n CPU Pipeline<br>Class Mapping & Box Serialization]
     end
 
     subgraph StreamB [Workstream B: Carbon Engine & Methodology]
@@ -49,7 +49,7 @@ graph TD
 ```
 
 ### Workstream A: Computer Vision & Image Review Specialist
-- **Core Focus:** Local image processing, Ultralytics YOLOv8n CPU pipeline, normalized bounding box extraction, and vehicle category remapping.
+- **Core Focus:** Local image processing, Ultralytics YOLO11n CPU pipeline with OpenCV annotation, normalized bounding box extraction, and vehicle category remapping.
 - **Key Deliverables:** Verified inference script, class remapping dictionary, test suite with 5 diverse parking photographs.
 
 ### Workstream B: Carbon Engine, Factors & Methodology Specialist
@@ -83,13 +83,13 @@ By **Hour 3**, the team freezes the following API contracts to allow independent
 ## 4. 48-Hour Execution Timeline & Milestones
 
 ### Phase 0: Kickoff, Environment Setup & Feasibility (Hours 0 – 3)
-- **H0.0 – H1.0:** Verify Python 3.11, PyTorch CPU, Ultralytics, and browser environment on the primary laptop. Initialize fresh Git repository.
-- **H1.0 – H2.0:** Assign team members to Workstreams A, B, C, D. Run inference benchmark of `yolov8n.pt` on CPU to confirm latency $< 3.5\text{s}$.
+- **H0.0 – H1.0:** Verify Python 3.11, PyTorch CPU, Ultralytics (`yolo11n.pt`), OpenCV (`cv2`), and browser environment on the primary laptop. Initialize fresh Git repository.
+- **H1.0 – H2.0:** Assign team members to Workstreams A, B, C, D. Run inference benchmark of `yolo11n.pt` on CPU using prototype script to confirm latency $< 3.5\text{s}$.
 - **H2.0 – H3.0:** Review and freeze the Shared REST API Contract. Workstream C begins building UI against mock JSON fixtures.
 
 ### Phase 1: Vertical Slice 1 — The Walking Skeleton (Hours 3 – 14)
 - **H3.0 – H8.0:**
-  - *Stream A:* Build minimal image ingestion script running YOLOv8n and outputting bounding box JSON.
+  - *Stream A:* Build minimal image ingestion script running YOLO11n and outputting bounding box JSON and OpenCV annotated plot.
   - *Stream B:* Write standalone Python function computing Benchmark Case 1 ($\text{VKT} \times EF = 45.0 \text{ t } CO_2$).
   - *Stream C:* Build basic HTML skeleton with image upload input and placeholder results table.
   - *Stream D:* Scaffold FastAPI server with CORS, upload handler, and mock simulation endpoint.
@@ -140,7 +140,7 @@ If development falls behind schedule at the Hour 28 Checkpoint, the Integration 
 graph TD
     subgraph MustKeep [CANNOT BE CUT - Core MVP]
         K1[Local FastAPI + SQLite]
-        K2[YOLOv8n CPU Detection]
+        K2[YOLO11n CPU Detection]
         K3[Basic Canvas Box Deletion]
         K4[Deterministic Baseline VKT x EF]
         K5[Scenario Sliders with Shuttle Added Fuel]

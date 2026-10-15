@@ -105,13 +105,15 @@ graph TD
 - **Goal:** Provide an image upload interface and interactive canvas where users inspect and correct computer vision detections.
 - **Requirements:**
   - Drag-and-drop or file picker for JPEG/PNG parking snapshot.
-  - Progress spinner while backend runs YOLOv8n inference on CPU.
-  - HTML5 Canvas rendering the uploaded image scaled to fit container.
+  - Progress spinner while backend runs YOLO11n inference on CPU.
+  - HTML5 Canvas rendering the uploaded image scaled to fit container (with toggle to view backend OpenCV `annotated_image` plot).
   - Render color-coded bounding rectangles for detected vehicles:
+    - Bicycles: Cyan (`#06b6d4`) [Active Transit Observation — Excluded from fuel-burning emissions]
     - Cars: Blue (`#38bdf8`)
     - Motorcycles & Scooters: Orange (`#f97316`)
     - Buses & Shuttles: Green (`#22c55e`)
-    - Other (including Auto-rickshaws): Purple (`#a855f7`)
+    - Other (including Auto-rickshaws / Trucks): Purple (`#a855f7`)
+  - **Summary Chips:** Render live count chips matching the CarboSync Vehicle Report (`Bicycle: X`, `Car: X`, `Motorcycle: X`, `Bus: X`, `Truck: X`, `Total Detected: X`).
   - **User Interactions on Canvas:**
     - Click box $\rightarrow$ shows action popup with Delete button and Class dropdown.
     - Delete button $\rightarrow$ removes box from array; updates summary count chip.

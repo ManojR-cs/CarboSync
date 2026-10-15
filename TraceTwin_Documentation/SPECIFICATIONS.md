@@ -24,7 +24,7 @@ graph TB
 
     subgraph Server [Local FastAPI Backend Application]
         Router[REST API Router]
-        CVModule[Computer Vision Pipeline - YOLOv8n CPU]
+        CVModule[Computer Vision Pipeline - YOLO11n CPU]
         CalcEngine[Deterministic Carbon Engine]
         TwinEngine[Digital Twin Scenario Engine]
         GuardProxy[Guarded AI Proxy & Schema Validator]
@@ -68,7 +68,7 @@ graph TB
 
 ### 2.2 Backend Application Server (FastAPI / Python 3.11)
 - **API Routing & Parameter Validation:** Asynchronous endpoints utilizing Pydantic models to enforce strict data types, positive numerical bounds, and enumerated categories.
-- **Computer Vision Inference:** Loads the pretrained `yolov8n.pt` model into memory on startup. Executes CPU-based object detection on uploaded images and serializes bounding boxes.
+- **Computer Vision Inference:** Loads the pretrained `yolo11n.pt` model into memory on startup. Executes CPU-based object detection on uploaded images, serializes bounding boxes, and generates OpenCV annotated image plots.
 - **Deterministic Carbon Accounting:** Pure Python mathematical module responsible for vehicle-kilometre and emissions calculations. Absolutely decoupled from the AI tier.
 - **Digital Twin Simulation Engine:** Recomputes travel activities under adjusted scenario parameters, applying rebound penalties (e.g., carpool detour distance, shuttle diesel fuel burn).
 - **AI Safeguard & Fallback Proxy:** Intercepts LLM calls, constructs non-PII aggregate prompts, enforces structured JSON responses, verifies recommendation IDs, and automatically activates the rule-based fallback if latency exceeds 4,000 ms.
@@ -86,27 +86,31 @@ graph TB
 flowchart LR
     A[Upload Image: JPEG/PNG] --> B[Validate MIME & Size]
     B --> C[Save to Local Temp Storage]
-    C --> D[YOLOv8n Inference on CPU]
-    D --> E[Filter Classes: Car, Moto, Bus, Truck]
+    C --> D[YOLO11n Inference on CPU conf=0.35]
+    D --> E[Filter Classes: Bicycle, Car, Moto, Bus, Truck]
+    D --> E2[OpenCV: results.plot and cv2.imwrite]
     E --> F[Extract Normalized Bounding Boxes & Confidence]
     F --> G[Return JSON Detection Payload to UI]
+    E2 --> G
 ```
 
 ### 3.1 Model Selection & Justification
-- **Model:** Ultralytics YOLOv8 Nano (`yolov8n.pt`).
-- **Weight Size:** ~6.2 MB.
+- **Model:** Ultralytics YOLO11 Nano (`yolo11n.pt`).
+- **Weight Size:** ~5.4 MB (ultra-lightweight, automatic download on first initialization).
 - **Target Execution Device:** Host CPU (Intel Core i5/i7 or AMD Ryzen equivalent; no CUDA GPU required).
 - **Inference Latency:** Estimated 1.5 – 3.0 seconds per $1920 \times 1080$ image on standard modern laptop CPU.
+- **Image Annotation Pipeline:** Uses `results[0].plot()` and OpenCV (`cv2.imwrite("detected_vehicles.jpg", annotated_image)`) to generate annotated visualization plots directly on disk.
 
 ### 3.2 Category Mapping & Class Reconciliation
-The standard COCO dataset contains 80 classes. TraceTwin filters and maps raw COCO detection IDs to the platform's four mandatory vehicle categories:
+The standard COCO dataset contains 80 classes. TraceTwin filters and maps raw COCO detection IDs to the platform's categories:
 
 | COCO Class ID | COCO Class Name | TraceTwin Category Target | Handling Notes |
 | :---: | :--- | :--- | :--- |
-| `2` | `car` | **Cars** | Standard passenger sedans, hatchbacks, SUVs. |
-| `3` | `motorcycle` | **Motorcycles and scooters** | Two-wheelers powered by petrol. |
-| `5` | `bus` | **Buses and campus shuttles** | Institutional buses, public transit coaches. |
-| `7` | `truck` | **Other fuel-burning vehicles** | Mapped as proxy for light commercial vehicles and delivery vans. |
+| `1` | `bicycle` | *Active Transit Observation* | Detected and counted in vehicle summary; rendered on canvas in Cyan (`#06b6d4`). **Excluded from tailpipe carbon emissions calculation** as zero-emission active transit. |
+| `2` | `car` | **Cars** | Standard passenger sedans, hatchbacks, SUVs. Mapped to Category 1. |
+| `3` | `motorcycle` | **Motorcycles and scooters** | Two-wheelers powered by petrol. Mapped to Category 2. |
+| `5` | `bus` | **Buses and campus shuttles** | Institutional buses, public transit coaches. Mapped to Category 3. |
+| `7` | `truck` | **Other fuel-burning vehicles** | Mapped as proxy for light commercial delivery vans and utility vehicles. |
 | *None* | *Auto-rickshaw* | **Other fuel-burning vehicles** | Pretrained COCO models often misclassify auto-rickshaws as cars or trucks. The human verification loop allows the user to reclassify these to "Other fuel-burning vehicles". |
 | `1` | `bicycle` | *Excluded / Filtered* | Non-motorized active transit is excluded from baseline. Flagged as informational or ignored. |
 
@@ -375,11 +379,12 @@ If the LLM fails, times out, or returns invalid JSON, the system loads predefine
 ## 10. External Dependencies & Technical Unknowns
 
 ### 10.1 External Runtime Dependencies
-- **Ultralytics YOLOv8 Python Package:** Requires PyTorch CPU binary. Must be installed during kickoff environment setup.
+- **Ultralytics YOLO Package (`ultralytics`):** Standard library supporting `yolo11n.pt` and PyTorch CPU binary.
+- **OpenCV (`opencv-python`):** Required for image decoding, `results[0].plot()` rendering, and `cv2.imwrite("detected_vehicles.jpg")`.
 - **Mapping Service (OSRM or Google Maps API):** Required only if live distance lookup is integrated. If disabled or unauthorized, system falls back to manual distance entry.
 - **LLM API Service (OpenAI, Gemini, or Anthropic):** Requires valid API key stored in local environment variable (`OPENAI_API_KEY`). Fallback protects against rate-limits or offline status.
 
 ### 10.2 Technical Unknowns Requiring Hackathon Verification
-- **CPU Inference Latency on Target Laptop:** Must measure exact execution time of `yolov8n.pt` on the specific host machine during Hour 1.
-- **Auto-rickshaw Detection Rate:** Evaluate how reliably YOLOv8n tags three-wheelers. If frequently missed, prioritize the manual bounding-box addition tool in the UI.
+- **CPU Inference Latency on Target Laptop:** Must measure exact execution time of `yolo11n.pt` on the specific host machine during Hour 1.
+- **Auto-rickshaw Detection Rate:** Evaluate how reliably YOLO11n tags three-wheelers (often classified as `truck` or `car`). Validate that the manual canvas reclassification tool smoothly reassigns them to "Other fuel-burning vehicles".
 - **Mapping API Data Transfer Clearance:** Confirm whether passing neighborhood postal centroids to a public routing API complies with institutional privacy constraints.

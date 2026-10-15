@@ -55,7 +55,7 @@ Represents individual bounding-box vehicle detections extracted by the computer 
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
 | `detection_id` | Unique identifier for the bounding box. | String (UUID) | — | `[Derived calculation]` | Yes | Non-sensitive | Regex: `^det_[a-zA-Z0-9_-]{8,32}$` |
 | `observation_id` | Foreign key referencing parent Observation.| String (UUID) | — | `[Derived calculation]` | Yes | Non-sensitive | Must match active `observation_id`. |
-| `raw_class` | Category detected by YOLOv8n. | String | — | `[Direct observation]` | Yes | Non-sensitive | E.g., "car", "motorcycle", "bus", "truck". |
+| `raw_class` | Category detected by YOLO11n. | String | — | `[Direct observation]` | Yes | Non-sensitive | E.g., "bicycle", "car", "motorcycle", "bus", "truck". |
 | `raw_confidence` | Model confidence score. | Float | ratio | `[Direct observation]` | Yes | Non-sensitive | Real number $\in [0.00, 1.00]$. |
 | `verified_category`| Human-confirmed vehicle category. | String (Enum) | — | `[Human-confirmed observation]` | Yes | Non-sensitive | Enum: `Cars`, `Motorcycles and scooters`, `Buses and campus shuttles`, `Other fuel-burning vehicles`. |
 | `box_coordinates`| Bounding rectangle $[x_{min}, y_{min}, x_{max}, y_{max}]$. | Object (JSON) | pixels | `[Human-confirmed observation]` | Yes | Non-sensitive | Coordinates within image dimensions: $0 \le x \le W$, $0 \le y \le H$. |

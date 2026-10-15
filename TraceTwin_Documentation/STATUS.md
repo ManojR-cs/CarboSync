@@ -43,7 +43,7 @@ The following technical components are specified in [SPECIFICATIONS.md](file:///
 | Feature Specification | Category | Status | Target Workstream |
 | :--- | :---: | :---: | :---: |
 | Local FastAPI server skeleton with CORS & static file mounts | Backend | `Proposed` | Workstream D |
-| Ultralytics YOLOv8n CPU pipeline with bounding-box serialization | CV | `Proposed` | Workstream A |
+| Ultralytics YOLO11n CPU pipeline with OpenCV plot generation | CV | `Proposed` | Workstream A |
 | HTML5 Canvas overlay for interactive box editing and reclassification | Frontend | `Proposed` | Workstream C |
 | Pure-Python deterministic baseline emissions engine ($\text{VKT} \times EF$) | Carbon Engine | `Proposed` | Workstream B |
 | Digital Twin scenario engine with carpool detours and added shuttle fuel | Carbon Engine | `Proposed` | Workstream B |
@@ -105,8 +105,8 @@ The following technical components are specified in [SPECIFICATIONS.md](file:///
 
 ## 7. Open Questions Requiring Team Decision at Kickoff
 
-1. **Auto-rickshaw CV Detection Fidelity:** Will `yolov8n.pt` classify auto-rickshaws as `truck`, `car`, or miss them completely?  
-   *Action:* Test 3 sample campus gate photos during Hour 1.
+1. **Auto-rickshaw CV Detection Fidelity:** Will `yolo11n.pt` classify auto-rickshaws as `truck`, `car`, or miss them completely?  
+   *Action:* Test 3 sample campus gate photos during Hour 1 using prototype script.
 2. **Student Register Authorization Scope:** While access is confirmed in principle, does authorization permit third-party API transmission of postal codes?  
    *Action:* Privacy Reviewer to enforce strictly local in-memory processing.
 3. **Primary Emission Factor Set:** Should the baseline use India GHG Program factors, ARAI figures, or DEFRA values adjusted for India?  

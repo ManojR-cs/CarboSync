@@ -19,7 +19,7 @@
 | **ADR-006** | Sample-Based Baseline vs. Explicit Campus Projections | `Confirmed` | Statistics & UI Presentation |
 | **ADR-007** | Three Core Digital Twin Scenarios with Added Emissions | `Confirmed` | Simulation Engine |
 | **ADR-008** | Guarded Generative AI with Deterministic Fallback | `Confirmed` | AI Safety & Robustness |
-| **ADR-009** | Pretrained Ultralytics YOLOv8n with Human-in-the-Loop Review | `Confirmed` | Computer Vision Pipeline |
+| **ADR-009** | Pretrained Ultralytics YOLO11n with Human-in-the-Loop Review | `Confirmed` | Computer Vision Pipeline |
 | **ADR-010** | Student Register Authorization Scope and Privacy Governance | `Needs verification` | Legal, Privacy & Compliance |
 | **ADR-011** | Zero Pre-Built Code Hackathon Compliance Standard | `Confirmed` | Competition Regulatory Compliance |
 | **ADR-012** | Proposed Technology Stack (FastAPI, SQLite, Vanilla JS) | `Proposed` | Implementation Engineering |
@@ -178,18 +178,18 @@
 
 ---
 
-## ADR-009: Pretrained Ultralytics YOLOv8n with Human-in-the-Loop Review
+## ADR-009: Pretrained Ultralytics YOLO11n with Human-in-the-Loop Review
 
 - **Decision ID:** `ADR-009`
 - **Topic:** Computer Vision Model Selection and Detection Workflow.
-- **Decision:** TraceTwin will use the pretrained Ultralytics `yolov8n.pt` model executing locally on the host CPU. Detections will be rendered on an interactive frontend canvas where a human reviewer must inspect, delete false positives, reclassify ambiguous vehicles, and manually add missed vehicles before counts are permanently saved as `[Human-confirmed observation]`.
+- **Decision:** TraceTwin will use the pretrained Ultralytics `yolo11n.pt` model executing locally on the host CPU. Detections will be processed via OpenCV and rendered on an interactive frontend canvas where a human reviewer must inspect, delete false positives, reclassify ambiguous vehicles, and manually add missed vehicles before counts are permanently saved as `[Human-confirmed observation]`.
 - **Status:** `Confirmed`
 - **Rationale:**
-  - The nano model (~6 MB) downloads in seconds, fits in lightweight memory, and executes inference in <3 seconds on standard laptop CPUs without CUDA/GPU dependencies.
+  - The YOLO11 nano model (~5.4 MB) downloads automatically on first run, fits in lightweight memory, and executes inference in <3 seconds on standard laptop CPUs without CUDA/GPU dependencies.
   - Pretrained models struggle with dense Indian parking lots, occlusion, and three-wheelers; embedding a human verification loop transforms an imperfect ML model into a reliable enterprise auditing workflow.
 - **Consequences:**
   - Frontend must implement interactive mouse controls for bounding box editing on an HTML5 Canvas or SVG overlay.
-- **Open Concerns:** Testing whether `yolov8n.pt` frequently misses motorcycles parked in tight rows.
+- **Open Concerns:** Testing whether `yolo11n.pt` frequently misses motorcycles parked in tight rows or requires manual reclassification for auto-rickshaws.
 - **Date / Stage:** Pre-Hackathon Planning (October 15, 2026).
 
 ---
@@ -232,7 +232,7 @@
 - **Topic:** Selection of Implementation Technologies.
 - **Decision:** The proposed stack consists of:
   - Backend: Python 3.11 with FastAPI and Uvicorn.
-  - Computer Vision: Ultralytics YOLOv8n running on local CPU.
+  - Computer Vision: Ultralytics YOLO11n running on local CPU with OpenCV (`cv2`).
   - Database: SQLite3 via standard Python libraries.
   - Frontend: Native Vanilla HTML5, modern CSS3, and ES6+ JavaScript.
   - Charting: Chart.js via local static script.

@@ -115,7 +115,7 @@ To preserve scientific validity, TraceTwin enforces complete computational isola
 ```mermaid
 flowchart TD
     subgraph StreamA [Stream A: Parking Photographs]
-        PA[Parking Snapshots] --> PB[Pretrained YOLOv8n]
+        PA[Parking Snapshots] --> PB[Pretrained YOLO11n + OpenCV Plot]
         PB --> PC[Human Review & Confirmation]
         PC --> PD[Verified Snapshot Count<br>Evidence: Human-confirmed observation]
     end

@@ -78,13 +78,14 @@ Treat the following as current working requirements (`Confirmed` by team):
 
 ### 6.2 Parking Image Upload & Computer Vision Pipeline (FR-2)
 - **FR-2.1:** The user shall upload JPEG or PNG photographs of campus parking areas.
-- **FR-2.2:** The backend shall process images through a pretrained Ultralytics YOLO model (`yolov8n.pt`) on local CPU.
-- **FR-2.3:** The system shall map detected bounding boxes to the four core categories:
-  - COCO class `car` $\rightarrow$ **Cars**
-  - COCO classes `motorcycle`, `bicycle` $\rightarrow$ **Motorcycles and scooters** (with manual correction available)
-  - COCO class `bus` $\rightarrow$ **Buses and campus shuttles**
-  - COCO class `truck` $\rightarrow$ **Other fuel-burning vehicles, including auto-rickshaws**
-- **FR-2.4:** The system shall display the detection confidence score and bounding box coordinates for each identified object.
+- **FR-2.2:** The backend shall process images through a pretrained Ultralytics YOLO11 Nano model (`yolo11n.pt`) on local CPU (`conf=0.35`).
+- **FR-2.3:** The system shall map detected COCO classes to TraceTwin categories:
+  - COCO class 1 `bicycle` $\rightarrow$ Active transit observation (counted in vehicle report, excluded from tailpipe carbon baseline).
+  - COCO class 2 `car` $\rightarrow$ **Cars**
+  - COCO class 3 `motorcycle` $\rightarrow$ **Motorcycles and scooters**
+  - COCO class 5 `bus` $\rightarrow$ **Buses and campus shuttles**
+  - COCO class 7 `truck` $\rightarrow$ **Other fuel-burning vehicles, including auto-rickshaws** (with manual correction available)
+- **FR-2.4:** The system shall display detection confidence scores, normalized coordinates, and generate OpenCV annotated plot images (`results[0].plot()`).
 - **FR-2.5:** The system shall explicitly record parking photo counts as snapshot observations, not daily unique commuters.
 
 ### 6.3 Human Verification Workflow (FR-3)
@@ -180,7 +181,7 @@ sequenceDiagram
     actor User as Campus Sustainability Officer
     participant UI as Web Frontend (Browser)
     participant API as FastAPI Backend
-    participant CV as YOLOv8n (CPU)
+    participant CV as YOLO11n (CPU)
     participant Engine as Deterministic Carbon Engine
     participant LLM as Guarded AI Service
 
@@ -190,8 +191,8 @@ sequenceDiagram
 
     User->>UI: 2. Upload Parking Lot Snapshot (JPEG)
     UI->>API: POST /api/assessments/ast_01/images
-    API->>CV: Run Object Detection (yolov8n.pt)
-    CV-->>API: Raw Detections (Boxes, Classes, Confidences)
+    API->>CV: Run Object Detection (yolo11n.pt, conf=0.35)
+    CV-->>API: Raw Detections & Annotated Plot (Boxes, Classes, Confidences)
     API-->>UI: Display Image with Interactive Bounding Boxes
 
     User->>UI: 3. Review Detections (Delete false positives, reclassify auto-rickshaw)
@@ -226,7 +227,7 @@ sequenceDiagram
 
 | Priority | Feature Description | Rationale |
 | :--- | :--- | :--- |
-| **Must-Have** | • Single-laptop local server execution (FastAPI + SQLite).<br>• Parking photo upload with local CPU YOLOv8n inference.<br>• Human verification bounding-box review interface (delete, edit class, add box).<br>• Deterministic baseline calculation engine ($\text{VKT} \times EF$) with explicit units.<br>• Separation of snapshot parking observations from daily commute inputs.<br>• Three Digital Twin scenarios (Fewer Days, Carpooling, Shuttle with added emissions).<br>• Guarded AI explanation with automated deterministic rule-based fallback.<br>• Evidence labeling for every metric on the dashboard. | Core MVP required to satisfy hackathon track, deliver high visual impact, and uphold scientific integrity. |
+| **Must-Have** | • Single-laptop local server execution (FastAPI + SQLite).<br>• Parking photo upload with local CPU YOLO11n inference (`conf=0.35`).<br>• Human verification bounding-box review interface (delete, edit class, add box).<br>• Deterministic baseline calculation engine ($\text{VKT} \times EF$) with explicit units.<br>• Separation of snapshot parking observations from daily commute inputs.<br>• Three Digital Twin scenarios (Fewer Days, Carpooling, Shuttle with added emissions).<br>• Guarded AI explanation with automated deterministic rule-based fallback.<br>• Evidence labeling for every metric on the dashboard. | Core MVP required to satisfy hackathon track, deliver high visual impact, and uphold scientific integrity. |
 | **Should-Have** | • Exportable audit summary report in print-ready HTML/PDF format.<br>• Locality-to-campus distance lookup via mapping API.<br>• Sample size sensitivity toggle (sample-based baseline vs. explicit campus projection).<br>• Interactive Chart.js mode-share and scenario comparison visualizations. | Essential for executive polish, visual impact, and rigorous evaluator inspection. |
 | **Could-Have** | • Multi-lot parking aggregation (comparing North vs. South gate occupancy).<br>• Weather condition tag for parking photos (e.g., monsoon vs. clear day commute bias).<br>• Preset municipal transit routes for auto-rickshaw feeder modeling. | Valuable enhancements if core workstreams finish ahead of schedule. |
 | **Out-of-Scope** | • Automated License Plate Recognition (ALPR) or vehicle tracking.<br>• Electric Vehicle (EV) charging load and grid-intensity emissions modeling.<br>• Active transit (walking and cycling) emissions modeling.<br>• Live video stream / continuous CCTV RTSP camera ingestion.<br>• Multi-tenant cloud SaaS deployment, authentication, or OAuth2. | Excluded to eliminate security risks, prevent technical bloat, and protect 48-hr execution. |
@@ -289,7 +290,7 @@ The following 14 critical risks represent foundational architectural and methodo
 ### 13.1 Assessment & Ingestion
 - [ ] System creates an Assessment record with name, period, and campus location.
 - [ ] User can upload a JPEG/PNG image up to 10 MB.
-- [ ] Backend runs YOLOv8n object detection locally without throwing memory or CPU exceptions.
+- [ ] Backend runs YOLO11n object detection locally without throwing memory or CPU exceptions.
 - [ ] Detections appear visually as bounded rectangles with category label and confidence score.
 
 ### 13.2 Human-in-the-Loop Review

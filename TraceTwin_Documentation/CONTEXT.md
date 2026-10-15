@@ -121,4 +121,4 @@ When prompted to assist the TraceTwin team during the hackathon:
 2. **Never Generate Code Prior to Kickoff:** Maintain the documentation-only boundary until the hackathon officially commences.
 3. **Verify Units on Every Change:** Whenever proposing a formula or endpoint, explicitly specify units (e.g., `km`, `kg CO2/km`, `tonnes CO2`).
 4. **Enforce Graceful Degradation:** Always implement the deterministic fallback path alongside any external API integration.
-5. **Keep It Simple:** Avoid recommending microservices, Docker clusters, Redux, Tailwind build pipelines, or cloud databases. Stick to the local, beginner-friendly stack (FastAPI, SQLite, Vanilla HTML/CSS/JS, Chart.js, YOLOv8n CPU).
+5. **Keep It Simple:** Avoid recommending microservices, Docker clusters, Redux, Tailwind build pipelines, or cloud databases. Stick to the local, beginner-friendly stack (FastAPI, SQLite, Vanilla HTML/CSS/JS, Chart.js, YOLO11n CPU).
