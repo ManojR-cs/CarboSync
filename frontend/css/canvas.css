@@ -1,0 +1,324 @@
+/* ============================================================
+   TraceTwin — canvas.css
+   Interactive Canvas Overlay, Bounding Box Toolbar,
+   Action Popup, Drawing Cursor
+   ============================================================ */
+
+/* ── Canvas Container ─────────────────────────────────────── */
+.canvas-wrapper {
+  position: relative;
+  background: #000;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid var(--card-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  cursor: crosshair;
+}
+
+.canvas-wrapper.cursor-pointer { cursor: pointer; }
+.canvas-wrapper.cursor-crosshair { cursor: crosshair; }
+.canvas-wrapper.cursor-default { cursor: default; }
+
+#parking-canvas {
+  display: block;
+  max-width: 100%;
+  max-height: 60vh;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+}
+
+/* ── Canvas Toolbar ───────────────────────────────────────── */
+.canvas-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-sm);
+  padding: var(--sp-sm) var(--sp-md);
+  background: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-md);
+  flex-wrap: wrap;
+}
+
+.canvas-tool-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  transition: all var(--transition-fast);
+  cursor: pointer;
+}
+
+.canvas-tool-btn:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border-color: var(--text-faint);
+}
+
+.canvas-tool-btn.active {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+.canvas-tool-btn.tool-delete:hover {
+  background: var(--danger-dim);
+  color: var(--danger);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.toolbar-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--card-border);
+}
+
+/* ── Canvas Action Popup ──────────────────────────────────── */
+.canvas-popup {
+  position: absolute;
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-md);
+  padding: var(--sp-md);
+  min-width: 200px;
+  box-shadow: var(--shadow-modal);
+  z-index: 50;
+  display: none;
+  animation: popIn 0.15s ease;
+}
+
+.canvas-popup.visible { display: block; }
+
+@keyframes popIn {
+  from { transform: scale(0.9); opacity: 0; }
+  to   { transform: scale(1);   opacity: 1; }
+}
+
+.popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--sp-sm);
+}
+
+.popup-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.popup-close {
+  width: 20px;
+  height: 20px;
+  background: var(--bg-elevated);
+  border: none;
+  border-radius: 50%;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.popup-close:hover {
+  background: var(--danger-dim);
+  color: var(--danger);
+}
+
+.popup-confidence {
+  font-size: 0.7rem;
+  color: var(--text-faint);
+  margin-bottom: var(--sp-sm);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.popup-select {
+  width: 100%;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  margin-bottom: var(--sp-sm);
+  cursor: pointer;
+}
+
+.popup-actions {
+  display: flex;
+  gap: var(--sp-xs);
+}
+
+/* ── Bounding Box SVG Overlays ────────────────────────────── */
+.bbox-overlay {
+  position: absolute;
+  top: 0; left: 0;
+  pointer-events: none;
+  width: 100%;
+  height: 100%;
+}
+
+.bbox-rect {
+  fill: transparent;
+  stroke-width: 2;
+  rx: 3;
+  cursor: pointer;
+  pointer-events: all;
+  transition: opacity var(--transition-fast);
+}
+
+.bbox-rect:hover { opacity: 0.75; stroke-width: 3; }
+
+.bbox-rect.selected {
+  stroke-width: 3;
+  filter: drop-shadow(0 0 6px currentColor);
+}
+
+.bbox-label {
+  fill: white;
+  font-size: 11px;
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.bbox-label-bg {
+  fill-opacity: 0.85;
+  rx: 3;
+  pointer-events: none;
+}
+
+/* ── Drawing Rect Preview ─────────────────────────────────── */
+.draw-rect-preview {
+  fill: rgba(56, 189, 248, 0.1);
+  stroke: #38bdf8;
+  stroke-width: 2;
+  stroke-dasharray: 5 3;
+  animation: dashAnim 0.5s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes dashAnim {
+  from { stroke-dashoffset: 0; }
+  to   { stroke-dashoffset: -16; }
+}
+
+/* ── Canvas Placeholder (no image) ───────────────────────── */
+.canvas-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-md);
+  padding: var(--sp-2xl);
+  color: var(--text-faint);
+  text-align: center;
+  min-height: 300px;
+}
+
+.canvas-placeholder-icon {
+  font-size: 4rem;
+  opacity: 0.3;
+}
+
+/* ── Image Toggle Buttons ─────────────────────────────────── */
+.image-toggle-group {
+  display: inline-flex;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+  gap: 2px;
+}
+
+.image-toggle-btn {
+  padding: 5px 14px;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.image-toggle-btn.active {
+  background: var(--card-surface);
+  color: var(--text-primary);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+
+/* ── Confidence Indicator ─────────────────────────────────── */
+.confidence-bar {
+  height: 3px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  margin-top: 3px;
+}
+
+.confidence-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width var(--transition-slow);
+}
+
+.conf-high   { background: var(--success); }
+.conf-medium { background: var(--warning); }
+.conf-low    { background: var(--danger); }
+
+/* ── Canvas Footer Info ───────────────────────────────────── */
+.canvas-info-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sp-sm) var(--sp-md);
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  color: var(--text-faint);
+  font-family: 'JetBrains Mono', monospace;
+  flex-wrap: wrap;
+  gap: var(--sp-sm);
+}
+
+.canvas-info-bar span { color: var(--text-muted); }
+
+/* ── Loading Overlay on Canvas ────────────────────────────── */
+.canvas-loading {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.85);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-md);
+  z-index: 10;
+  border-radius: var(--radius-md);
+  backdrop-filter: blur(4px);
+}
+
+.canvas-loading-text {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  animation: loadPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes loadPulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}

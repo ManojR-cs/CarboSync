@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TraceTwin — Campus Commute Emissions Intelligence</title>
+  <meta name="description" content="See the traffic. Trace the carbon. Test the fix. TraceTwin is a campus commute emissions estimation platform combining computer vision and digital twin simulation." />
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="css/main.css" />
+  <link rel="stylesheet" href="css/components.css" />
+  <link rel="stylesheet" href="css/canvas.css" />
+
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<div class="app-wrapper">
+
+  <!-- ═══════════════ HEADER ═══════════════ -->
+  <header class="app-header" role="banner">
+    <div class="header-brand">
+      <div class="brand-icon" aria-hidden="true">🌿</div>
+      <div>
+        <div class="brand-title">TraceTwin</div>
+        <div class="brand-tagline">See the traffic. Trace the carbon. Test the fix.</div>
+      </div>
+    </div>
+
+    <div class="header-meta">
+      <!-- Mock / Live Toggle -->
+      <label class="toggle-switch" title="Toggle between mock data and live backend">
+        <input type="checkbox" id="mock-toggle" checked />
+        <div class="toggle-track"><div class="toggle-thumb"></div></div>
+        <span class="text-xs text-muted">Mock</span>
+      </label>
+
+      <!-- Backend status -->
+      <div class="chip" style="gap:8px;">
+        <span class="status-dot mock" id="status-dot"></span>
+        <span id="status-text" class="text-xs">Mock Mode</span>
+        <span class="badge badge-accent" id="api-status-badge">Mock Mode</span>
+      </div>
+
+      <!-- Methodology button -->
+      <button class="btn btn-ghost btn-sm" id="open-methodology-btn" aria-label="Open methodology and audit panel">
+        📐 Methodology &amp; Audit
+      </button>
+    </div>
+  </header>
+
+  <!-- ═══════════════ ACTIVE ASSESSMENT BAR ═══════════════ -->
+  <div class="main-content" style="padding-bottom:0; padding-top: 12px;">
+    <div class="assessment-bar" id="assessment-bar" style="display:none;" role="status">
+      <div class="assessment-bar-info">
+        <span class="badge badge-accent">🔬 Active Audit</span>
+        <strong id="active-assessment-name">—</strong>
+        <span class="text-muted text-sm">|</span>
+        <span class="chip"><span>📍</span> <span id="active-assessment-area">—</span></span>
+        <span class="chip"><span>📅</span> <span id="active-assessment-days">—</span></span>
+      </div>
+      <span class="badge badge-human">[Human-confirmed observation]</span>
+    </div>
+  </div>
+
+  <!-- ═══════════════ TAB NAVIGATION ═══════════════ -->
+  <nav class="tab-nav" role="navigation" aria-label="Main navigation">
+    <button class="tab-btn active" data-tab="1" id="tab-btn-1" aria-controls="tab-panel-1">
+      <span class="tab-num">1</span> Assessment
+    </button>
+    <button class="tab-btn" data-tab="2" id="tab-btn-2" aria-controls="tab-panel-2">
+      <span class="tab-num">2</span> Parking CV Audit
+    </button>
+    <button class="tab-btn" data-tab="3" id="tab-btn-3" aria-controls="tab-panel-3">
+      <span class="tab-num">3</span> Commute Data
+    </button>
+    <button class="tab-btn" data-tab="4" id="tab-btn-4" aria-controls="tab-panel-4">
+      <span class="tab-num">4</span> Baseline Emissions
+    </button>
+    <button class="tab-btn" data-tab="5" id="tab-btn-5" aria-controls="tab-panel-5">
+      <span class="tab-num">5</span> Digital Twin Scenarios
+    </button>
+    <button class="tab-btn" data-tab="6" id="tab-btn-6" aria-controls="tab-panel-6">
+      <span class="tab-num">6</span> AI Policy Cards
+    </button>
+  </nav>
+
+  <!-- ═══════════════ MAIN CONTENT ═══════════════ -->
+  <main class="main-content" role="main">
+
+    <!-- ─────────────── TAB 1: ASSESSMENT SETUP ─────────────── -->
+    <section class="tab-panel active" id="tab-panel-1" role="tabpanel" aria-labelledby="tab-btn-1">
+      <div class="section-header">
+        <h1>New Emissions Assessment</h1>
+        <p>Initialise a new campus commute audit session. All data is stored locally.</p>
+      </div>
+
+      <div class="grid-2" style="max-width:860px;">
+        <div class="card" style="grid-column: 1 / -1;">
+          <form id="assessment-form" novalidate>
+            <div class="grid-2" style="gap: var(--sp-md);">
+
+              <div class="form-group">
+                <label class="form-label" for="audit-name">Audit Name</label>
+                <input class="form-input" id="audit-name" type="text"
+                  placeholder="e.g. DSU Autumn 2026 Audit"
+                  value="DSU Autumn 2026 Audit" required />
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="campus-area">Campus / Facility Zone</label>
+                <input class="form-input" id="campus-area" type="text"
+                  placeholder="e.g. North Gate Parking"
+                  value="North Gate Parking" required />
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="reporting-period">Reporting Period</label>
+                <select class="form-select" id="reporting-period">
+                  <option value="Academic Year 2026-27">Academic Year 2026–27</option>
+                  <option value="Semester 1 2026">Semester 1 2026</option>
+                  <option value="Semester 2 2026">Semester 2 2026</option>
+                  <option value="Academic Year 2025-26">Academic Year 2025–26</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="annual-days">Annual Academic Days</label>
+                <input class="form-input" id="annual-days" type="number"
+                  value="200" min="1" max="366" required />
+                <span class="form-hint">Commuting days per year (default: 200)</span>
+              </div>
+
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="flex items-center justify-between flex-wrap gap-md">
+              <div class="alert alert-info" style="margin:0; flex:1;">
+                <span class="alert-icon">ℹ️</span>
+                <span>All fields use local storage only. No student PII is collected or transmitted.</span>
+              </div>
+              <button type="submit" class="btn btn-primary btn-lg" id="create-assessment-btn">
+                Create Assessment &amp; Continue →
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Info cards -->
+        <div class="card">
+          <h3 style="margin-bottom:var(--sp-sm);">📊 What We Measure</h3>
+          <p class="text-sm">Tailpipe CO₂ from commuting vehicles — Cars, Motorcycles &amp; Scooters, Buses, and Other fuel-burning vehicles (including auto-rickshaws).</p>
+          <div class="divider"></div>
+          <p class="text-sm text-muted">EVs, walking, and cycling are <strong>excluded</strong> from the baseline as zero-emission modes.</p>
+        </div>
+
+        <div class="card">
+          <h3 style="margin-bottom:var(--sp-sm);">🔬 How It Works</h3>
+          <ol style="display:flex; flex-direction:column; gap:6px; padding-left:var(--sp-md); list-style:decimal; color:var(--text-secondary); font-size:0.875rem;">
+            <li>Upload a parking photo → YOLO11n detects vehicles</li>
+            <li>You review &amp; correct detections</li>
+            <li>Enter commute survey data</li>
+            <li>View calculated CO₂ baseline &amp; run scenarios</li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─────────────── TAB 2: PARKING CV AUDIT ─────────────── -->
+    <section class="tab-panel" id="tab-panel-2" role="tabpanel" aria-labelledby="tab-btn-2">
+      <div class="section-header">
+        <h2>Parking Image Upload &amp; Interactive CV Review</h2>
+        <p>Upload a parking snapshot. YOLO11n detects vehicles. Review, correct, and confirm.</p>
+      </div>
+
+      <!-- Drop Zone -->
+      <div id="drop-section">
+        <div class="drop-zone" id="drop-zone" role="button" aria-label="Upload parking image">
+          <input type="file" id="image-file-input" accept="image/jpeg,image/png" aria-label="Choose parking photo" />
+          <div class="drop-zone-icon">📷</div>
+          <div class="drop-zone-label">Drag &amp; drop a parking photo here</div>
+          <div class="drop-zone-hint">or click to browse — JPEG / PNG, max 20 MB</div>
+          <div class="mt-md">
+            <span class="badge badge-info">YOLO11n inference runs on CPU (~2–3 sec)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Canvas Section (hidden until image loaded) -->
+      <div id="canvas-section" style="display:none;">
+
+        <!-- Toolbar -->
+        <div class="canvas-toolbar mb-md flex-wrap" style="gap:var(--sp-xs);">
+          <button class="canvas-tool-btn active" id="tool-select-btn" title="Select / click detections">
+            ↖ Select
+          </button>
+          <button class="canvas-tool-btn" id="tool-draw-btn" title="Draw new bounding box">
+            ✏️ Draw Box
+          </button>
+          <button class="canvas-tool-btn tool-delete" id="tool-delete-btn" title="Delete selected box">
+            🗑 Delete
+          </button>
+          <div class="toolbar-divider"></div>
+          <div class="image-toggle-group">
+            <button class="image-toggle-btn active" id="view-raw-btn">Raw Detection</button>
+            <button class="image-toggle-btn" id="view-annotated-btn">CV Annotated</button>
+          </div>
+          <div class="toolbar-divider"></div>
+          <span class="text-xs text-muted" style="align-self:center;">Click box to select · Del key to remove</span>
+        </div>
+
+        <!-- Canvas + SVG overlay -->
+        <div class="canvas-wrapper" id="canvas-wrapper">
+          <canvas id="parking-canvas"></canvas>
+          <svg id="bbox-svg" class="bbox-overlay" aria-hidden="true"></svg>
+
+          <!-- Action Popup -->
+          <div class="canvas-popup" id="canvas-popup" role="dialog" aria-label="Detection actions">
+            <div class="popup-header">
+              <span class="popup-title">Edit Detection</span>
+              <button class="popup-close" id="popup-close-btn" aria-label="Close popup">✕</button>
+            </div>
+            <div class="popup-confidence" id="popup-confidence">Category · 0% confidence</div>
+            <select class="popup-select" id="popup-class-select" aria-label="Reclassify vehicle">
+              <option>Cars</option>
+              <option>Motorcycles and scooters</option>
+              <option>Buses and campus shuttles</option>
+              <option>Other fuel-burning vehicles</option>
+              <option>Bicycles</option>
+            </select>
+            <div class="popup-actions">
+              <button class="btn btn-danger btn-sm" id="popup-delete-btn">🗑 Delete</button>
+              <button class="btn btn-ghost btn-sm" id="popup-close-btn2">Close</button>
+            </div>
+          </div>
+
+          <!-- Loading overlay -->
+          <div class="canvas-loading" id="canvas-loading" style="display:none;">
+            <div class="spinner"></div>
+            <div class="canvas-loading-text">Running YOLO11n inference…</div>
+          </div>
+        </div>
+
+        <!-- Canvas info bar -->
+        <div class="canvas-info-bar mt-sm">
+          <span>Resolution: <span id="canvas-res">—</span></span>
+          <span>Detections: <span id="canvas-det-count">—</span></span>
+          <span class="badge badge-human">[Human-confirmed observation pending]</span>
+        </div>
+
+        <!-- Vehicle Count Chips -->
+        <div class="card mt-md">
+          <div class="flex items-center justify-between mb-md flex-wrap gap-sm">
+            <h4>Vehicle Count Summary</h4>
+            <span class="badge badge-direct">[Direct observation]</span>
+          </div>
+          <div class="vehicle-chips">
+            <div class="veh-chip chip-bicycle">
+              🚲 Bicycle <span class="veh-chip-count" id="chip-count-bicycle">0</span>
+              <span class="text-xs text-muted">(excluded)</span>
+            </div>
+            <div class="veh-chip chip-car">
+              🚗 Car <span class="veh-chip-count" id="chip-count-car">0</span>
+            </div>
+            <div class="veh-chip chip-moto">
+              🏍 Motorcycle <span class="veh-chip-count" id="chip-count-moto">0</span>
+            </div>
+            <div class="veh-chip chip-bus">
+              🚌 Bus <span class="veh-chip-count" id="chip-count-bus">0</span>
+            </div>
+            <div class="veh-chip chip-other">
+              🛺 Other <span class="veh-chip-count" id="chip-count-other">0</span>
+            </div>
+            <div class="veh-chip chip-total">
+              📊 Total <span class="veh-chip-count" id="chip-count-total">0</span>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="flex items-center justify-between flex-wrap gap-md">
+            <div class="alert alert-info" style="margin:0; flex:1;">
+              <span class="alert-icon">💡</span>
+              <span class="text-sm">Auto-rickshaws are often detected as <em>Car</em> or <em>Truck</em>. Use the popup to reclassify them as <strong>Other fuel-burning vehicles</strong>.</span>
+            </div>
+            <button class="btn btn-success btn-lg" id="confirm-verify-btn">
+              ✓ Confirm Verification
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─────────────── TAB 3: COMMUTE DATA ─────────────── -->
+    <section class="tab-panel" id="tab-panel-3" role="tabpanel" aria-labelledby="tab-btn-3">
+      <div class="section-header">
+        <h2>Commute Activity &amp; Survey Data Entry</h2>
+        <p>Enter daily vehicle counts, average distances, and occupancy from your commute survey.</p>
+      </div>
+
+      <!-- Sample size warning -->
+      <div class="alert alert-warning" id="sample-size-warning" style="display:none;">
+        <span class="alert-icon">⚠️</span>
+        <span>
+          <strong>Sample Size: n = <span id="sample-size-n">0</span> (&lt; 20).</strong>
+          Headline metric will be restricted to <em>Sample-Based Baseline</em>. Campus-wide projection requires caution.
+        </span>
+      </div>
+
+      <div class="card">
+        <div class="flex items-center justify-between mb-lg flex-wrap gap-md">
+          <h3>Modal Commute Parameters</h3>
+          <div class="flex gap-sm flex-wrap">
+            <button class="btn btn-outline btn-sm" id="load-preset-btn">
+              📂 Load DSU Sample Survey (n=18)
+            </button>
+          </div>
+        </div>
+
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Vehicle Category</th>
+                <th>Daily Vehicles (N)</th>
+                <th>Avg One-Way Distance (km)</th>
+                <th>Vehicle Occupancy (persons/veh)</th>
+              </tr>
+            </thead>
+            <tbody id="commute-table-body">
+              <tr>
+                <td><strong>🚗 Cars</strong></td>
+                <td><input class="table-input" id="vehicles-0" type="number" value="0" min="0" /></td>
+                <td><input class="table-input" id="distance-0" type="number" value="0" step="0.1" min="0.1" /></td>
+                <td><input class="table-input" id="occupancy-0" type="number" value="1.1" step="0.1" min="1" max="5" /></td>
+              </tr>
+              <tr>
+                <td><strong>🏍 Motorcycles &amp; Scooters</strong></td>
+                <td><input class="table-input" id="vehicles-1" type="number" value="0" min="0" /></td>
+                <td><input class="table-input" id="distance-1" type="number" value="0" step="0.1" min="0.1" /></td>
+                <td><input class="table-input" id="occupancy-1" type="number" value="1.0" step="0.1" min="1" max="2" /></td>
+              </tr>
+              <tr>
+                <td><strong>🚌 Buses &amp; Campus Shuttles</strong></td>
+                <td><input class="table-input" id="vehicles-2" type="number" value="0" min="0" /></td>
+                <td><input class="table-input" id="distance-2" type="number" value="0" step="0.1" min="0.1" /></td>
+                <td><input class="table-input" id="occupancy-2" type="number" value="35" step="1" min="1" max="60" /></td>
+              </tr>
+              <tr>
+                <td><strong>🛺 Other fuel-burning vehicles</strong></td>
+                <td><input class="table-input" id="vehicles-3" type="number" value="0" min="0" /></td>
+                <td><input class="table-input" id="distance-3" type="number" value="0" step="0.1" min="0.1" /></td>
+                <td><input class="table-input" id="occupancy-3" type="number" value="1.8" step="0.1" min="1" max="4" /></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="grid-2 gap-md" style="max-width:600px;">
+          <div class="form-group">
+            <label class="form-label" for="sample-size-input">Survey Sample Size (n)</label>
+            <input class="form-input" id="sample-size-input" type="number" value="18" min="1" />
+            <span class="form-hint">Number of respondents in your survey</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="population-input">Campus Population (for projection)</label>
+            <input class="form-input" id="population-input" type="number" value="4500" min="1" />
+            <span class="form-hint">Total students + faculty count</span>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="flex items-center justify-between flex-wrap gap-md">
+          <div>
+            <p class="text-sm text-muted">Formula: <code class="font-mono">VKT = N × D × 2 × Y</code> &nbsp;|&nbsp; <code class="font-mono">Emissions = VKT × EF (kg CO₂/km)</code></p>
+            <p class="text-xs text-muted mt-sm">
+              <span class="badge badge-derived">[Derived calculation]</span> — All emissions values are deterministically calculated.
+            </p>
+          </div>
+          <button class="btn btn-primary btn-lg" id="calc-baseline-btn">
+            Calculate Baseline Emissions →
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─────────────── TAB 4: BASELINE EMISSIONS DASHBOARD ─────────────── -->
+    <section class="tab-panel" id="tab-panel-4" role="tabpanel" aria-labelledby="tab-btn-4">
+      <div class="section-header">
+        <div class="flex items-center justify-between flex-wrap gap-md">
+          <div>
+            <h2>Baseline Emissions Dashboard</h2>
+            <p>Calculated commute carbon footprint with full evidence transparency.</p>
+          </div>
+          <div class="flex items-center gap-md">
+            <label class="toggle-switch">
+              <input type="checkbox" id="projection-toggle" />
+              <div class="toggle-track"><div class="toggle-thumb"></div></div>
+              <span class="text-sm" id="projection-label">Sample-Based Baseline</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sample warning (baseline) -->
+      <div class="alert alert-warning" id="baseline-sample-warning" style="display:none;">
+        <span class="alert-icon">⚠️</span>
+        <span><strong>Small sample (n &lt; 20).</strong> This baseline reflects surveyed vehicles only. Do not extrapolate to campus-wide totals without explicit assumptions.</span>
+      </div>
+
+      <!-- Campus projection banner -->
+      <div class="alert alert-warning" id="projection-banner" style="display:none;">
+        <span class="alert-icon">📣</span>
+        <span><strong>Campus Projection Mode:</strong> Figures are scaled from sample to total campus population. This assumes the survey sample is representative. Treat with caution.</span>
+      </div>
+
+      <!-- KPI Cards -->
+      <div class="grid-4 mb-xl">
+        <div class="kpi-card" style="--kpi-accent: var(--accent);">
+          <div class="kpi-icon">🌍</div>
+          <div class="kpi-label">Total Annual Emissions</div>
+          <div class="kpi-value" id="kpi-total-co2">—</div>
+          <div class="kpi-unit">tonnes CO₂ / year</div>
+          <div class="mt-sm"><span class="badge badge-derived">[Derived calculation]</span></div>
+        </div>
+        <div class="kpi-card" style="--kpi-accent: var(--warning);">
+          <div class="kpi-icon">🛣</div>
+          <div class="kpi-label">Total Annual VKT</div>
+          <div class="kpi-value" id="kpi-total-vkt">—</div>
+          <div class="kpi-unit">km driven per year</div>
+          <div class="mt-sm"><span class="badge badge-derived">[Derived calculation]</span></div>
+        </div>
+        <div class="kpi-card" style="--kpi-accent: var(--success);">
+          <div class="kpi-icon">📋</div>
+          <div class="kpi-label">Survey Sample Size</div>
+          <div class="kpi-value" id="kpi-sample-n">—</div>
+          <div class="kpi-unit">respondents</div>
+          <div class="mt-sm"><span class="badge badge-survey">[Survey-reported value]</span></div>
+        </div>
+        <div class="kpi-card" style="--kpi-accent: #818cf8;">
+          <div class="kpi-icon">📅</div>
+          <div class="kpi-label">Academic Days (Y)</div>
+          <div class="kpi-value" id="kpi-annual-days">200</div>
+          <div class="kpi-unit">days / year</div>
+          <div class="mt-sm"><span class="badge badge-source">[Source-derived value]</span></div>
+        </div>
+      </div>
+
+      <!-- Chart + Table -->
+      <div class="grid-2 mb-xl" style="align-items:start;">
+        <div class="card">
+          <h3 class="mb-md">Mode Contribution Breakdown</h3>
+          <canvas id="breakdown-doughnut" height="260"></canvas>
+        </div>
+        <div class="card">
+          <div class="flex items-center justify-between mb-md">
+            <h3>Category Metrics</h3>
+            <span class="badge badge-derived">[Derived calculation]</span>
+          </div>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Category</th>
+                  <th>Daily Veh.</th>
+                  <th>Annual VKT</th>
+                  <th>EF (kg/km)</th>
+                  <th>t CO₂/yr</th>
+                  <th>Evidence</th>
+                </tr>
+              </thead>
+              <tbody id="breakdown-tbody">
+                <tr>
+                  <td colspan="6" class="text-muted text-sm" style="text-align:center; padding:var(--sp-lg);">
+                    Calculate baseline to see results
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Run Scenarios CTA -->
+      <div class="card" style="background: linear-gradient(135deg, rgba(56,189,248,0.08), rgba(129,140,248,0.08)); border-color: rgba(56,189,248,0.2);">
+        <div class="flex items-center justify-between flex-wrap gap-md">
+          <div>
+            <h3>Ready to test decarbonisation scenarios?</h3>
+            <p class="text-sm mt-sm">Use the Digital Twin to simulate remote schedules, carpooling incentives, and shuttle routes.</p>
+          </div>
+          <button class="btn btn-primary btn-lg" onclick="switchTab(5)">
+            Go to Digital Twin Scenarios →
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─────────────── TAB 5: DIGITAL TWIN SCENARIOS ─────────────── -->
+    <section class="tab-panel" id="tab-panel-5" role="tabpanel" aria-labelledby="tab-btn-5">
+      <div class="section-header">
+        <div class="flex items-center justify-between flex-wrap gap-md">
+          <div>
+            <h2>Digital Twin Scenario Simulation</h2>
+            <p>Adjust parameters and simulate campus decarbonisation interventions in real-time.</p>
+          </div>
+          <button class="btn btn-primary" id="run-simulation-btn">▶ Run Simulation</button>
+        </div>
+      </div>
+
+      <!-- Scenario Controls -->
+      <div class="grid-3 mb-xl" style="align-items:start;">
+
+        <!-- Scenario 1 -->
+        <div class="card">
+          <div class="flex items-center gap-sm mb-md">
+            <span class="badge badge-accent">S1</span>
+            <h3>Remote / Hybrid Schedule</h3>
+          </div>
+          <p class="text-sm text-muted mb-lg">Reduce on-campus academic days by shifting to asynchronous learning.</p>
+          <div class="slider-wrapper">
+            <div class="slider-header">
+              <span class="slider-label">Remote Day Reduction</span>
+              <span class="slider-value" id="s1-remote-val">20%</span>
+            </div>
+            <input type="range" id="s1-remote-slider" min="0" max="50" value="20" step="5" />
+            <div class="flex justify-between text-xs text-muted">
+              <span>0% (no change)</span><span>50% max</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Scenario 2 -->
+        <div class="card">
+          <div class="flex items-center gap-sm mb-md">
+            <span class="badge badge-success">S2</span>
+            <h3>Carpool Incentive</h3>
+          </div>
+          <p class="text-sm text-muted mb-lg">Shift solo car drivers into verified carpools with 10% detour penalty.</p>
+          <div class="slider-wrapper mb-md">
+            <div class="slider-header">
+              <span class="slider-label">Solo Drivers Carpooling</span>
+              <span class="slider-value" id="s2-carpool-val">30%</span>
+            </div>
+            <input type="range" id="s2-carpool-slider" min="0" max="60" value="30" step="5" />
+            <div class="flex justify-between text-xs text-muted">
+              <span>0%</span><span>60% max</span>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="s2-occupancy-input">Target Carpool Occupancy</label>
+            <input class="form-input" id="s2-occupancy-input" type="number" value="2.5" min="2" max="5" step="0.5" />
+          </div>
+        </div>
+
+        <!-- Scenario 3 -->
+        <div class="card">
+          <div class="flex items-center gap-sm mb-md">
+            <span class="badge badge-warning">S3</span>
+            <h3>Institutional Shuttle</h3>
+          </div>
+          <p class="text-sm text-muted mb-lg">Model campus shuttle routes — net emissions include shuttle diesel burn.</p>
+          <div class="grid-2 gap-sm">
+            <div class="form-group">
+              <label class="form-label" for="s3-routes-input">Routes</label>
+              <input class="form-input" id="s3-routes-input" type="number" value="2" min="1" max="5" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="s3-trips-input">Roundtrips/day</label>
+              <input class="form-input" id="s3-trips-input" type="number" value="4" min="2" max="10" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="s3-km-input">Route Distance (km)</label>
+              <input class="form-input" id="s3-km-input" type="number" value="12" min="1" step="0.5" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Commuters Diverted</label>
+              <span class="slider-value" id="s3-shifted-val" style="display:block;">50 vehicles</span>
+            </div>
+          </div>
+          <div class="slider-wrapper mt-sm">
+            <input type="range" id="s3-shifted-slider" min="0" max="200" value="50" step="10" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Shuttle Disclosure -->
+      <div id="shuttle-emissions-disclosure" class="card mb-xl" style="border-color: rgba(245,158,11,0.2);">
+        <h4 class="mb-md" style="color:var(--warning);">⚠️ Shuttle Emissions Disclosure (Scenario 3)</h4>
+        <div class="grid-2" style="max-width:600px;">
+          <div>
+            <div class="text-xs text-muted">Avoided Private Emissions</div>
+            <div class="font-mono font-bold text-success" style="font-size:1.2rem;" id="avoided-private-val">—</div>
+          </div>
+          <div>
+            <div class="text-xs text-muted">Added Shuttle Diesel Emissions</div>
+            <div class="font-mono font-bold text-warning" style="font-size:1.2rem;" id="added-shuttle-val">—</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Negative savings banner -->
+      <div class="alert alert-danger" id="negative-savings-banner" style="display:none;">
+        <span class="alert-icon">🚨</span>
+        <span>
+          <strong>Caution:</strong> This shuttle configuration results in <strong>net added emissions (+<span id="shuttle-added-emissions">0</span> t CO₂)</strong> due to low passenger diversion relative to diesel burn.
+        </span>
+      </div>
+
+      <!-- Scenario KPI Row -->
+      <div class="grid-4 mb-xl">
+        <div class="kpi-card" style="--kpi-accent:#94a3b8;">
+          <div class="kpi-label">Baseline</div>
+          <div class="kpi-value text-sm" id="scenario-baseline-val">—</div>
+          <div class="kpi-unit">t CO₂/yr</div>
+        </div>
+        <div class="kpi-card" style="--kpi-accent:#818cf8;">
+          <div class="kpi-label">Scenario 1 — Remote</div>
+          <div class="kpi-value text-sm text-success" id="scenario-s1-val">—</div>
+          <div class="kpi-unit">t CO₂/yr</div>
+        </div>
+        <div class="kpi-card" style="--kpi-accent:var(--success);">
+          <div class="kpi-label">Scenario 2 — Carpool</div>
+          <div class="kpi-value text-sm text-success" id="scenario-s2-val">—</div>
+          <div class="kpi-unit">t CO₂/yr</div>
+        </div>
+        <div class="kpi-card" style="--kpi-accent:var(--warning);">
+          <div class="kpi-label">Scenario 3 — Shuttle</div>
+          <div class="kpi-value text-sm" id="scenario-s3-val">—</div>
+          <div class="kpi-unit">t CO₂/yr</div>
+        </div>
+      </div>
+
+      <!-- Net Savings -->
+      <div class="card mb-xl" style="text-align:center;">
+        <div class="text-xs text-muted mb-sm">Best-Case Net CO₂ Saving (Combined Scenarios)</div>
+        <div class="font-mono font-bold" style="font-size:2.5rem;" id="net-savings-val">—</div>
+        <div class="text-xs text-muted">per academic year</div>
+        <div class="mt-sm"><span class="badge badge-derived">[Derived calculation]</span></div>
+      </div>
+
+      <!-- Bar Chart -->
+      <div class="card">
+        <h3 class="mb-md">Scenario Comparison — Baseline vs. Interventions</h3>
+        <div style="height:320px; position:relative;">
+          <canvas id="scenario-bar-chart"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─────────────── TAB 6: AI POLICY CARDS ─────────────── -->
+    <section class="tab-panel" id="tab-panel-6" role="tabpanel" aria-labelledby="tab-btn-6">
+      <div class="section-header">
+        <h2>Guarded AI Policy Recommendations</h2>
+        <p>Qualitative policy cards with deterministically-attached savings figures. Numbers are calculated — not generated by AI.</p>
+      </div>
+
+      <!-- Fallback Banner (shown when fallback_activated = true) -->
+      <div class="fallback-banner" id="fallback-banner" style="display:none;">
+        🛡️ <strong>Rule-based plan (AI unavailable)</strong> — Generated via deterministic campus policy rules. All savings figures are calculated by the TraceTwin engine.
+      </div>
+
+      <!-- Rec Cards Container -->
+      <div class="grid-3 mb-xl" id="rec-cards-container">
+        <!-- Empty state -->
+        <div class="empty-state" style="grid-column: 1 / -1;">
+          <div class="empty-state-icon">🤖</div>
+          <h3 class="mb-sm">Run a simulation to generate recommendations</h3>
+          <p class="text-sm">Go to <strong>Tab 5 — Digital Twin Scenarios</strong> and click <strong>Run Simulation</strong>.</p>
+          <button class="btn btn-outline mt-md" onclick="switchTab(5)">Go to Scenarios →</button>
+        </div>
+      </div>
+
+      <!-- Boundary Notice -->
+      <div class="card" style="border-color: rgba(13,148,136,0.3);">
+        <h4 class="mb-sm" style="color:var(--ev-derived);">🔒 AI Safety Guardrails Active</h4>
+        <ul style="display:flex; flex-direction:column; gap:6px; padding-left:var(--sp-md); list-style:disc; color:var(--text-secondary); font-size:0.875rem;">
+          <li>AI is instructed to provide <strong>qualitative rationale only</strong> — it cannot calculate or mention emission quantities.</li>
+          <li>All savings figures are <strong>injected by the deterministic engine</strong> after AI response validation.</li>
+          <li>If AI times out (&gt;4 s) or returns invalid JSON, the deterministic fallback catalog activates automatically.</li>
+          <li>Only pre-approved recommendation IDs (REC_POOL_01, REC_SHUTTLE_01, REC_REMOTE_01, etc.) are permitted.</li>
+        </ul>
+      </div>
+    </section>
+
+  </main><!-- /main content -->
+
+</div><!-- /app-wrapper -->
+
+<!-- ═══════════════ METHODOLOGY MODAL ═══════════════ -->
+<div class="modal-overlay" id="methodology-modal" role="dialog" aria-modal="true" aria-label="Methodology and Audit Panel">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>📐 Methodology &amp; Factor Provenance</h2>
+      <button class="btn btn-ghost btn-sm" id="close-methodology-btn" aria-label="Close">✕ Close</button>
+    </div>
+
+    <!-- Formulas -->
+    <div class="method-section">
+      <h4>Core Calculation Formulas</h4>
+      <div class="formula-block">
+        VKT_k  (km/year) = N_k × D_k × 2 × Y<br/>
+        Emissions_k (kg CO₂/year) = VKT_k × EF_k<br/>
+        Total Baseline (t CO₂/year) = Σ Emissions_k ÷ 1000
+      </div>
+      <p class="text-sm text-muted">Where N_k = daily vehicles, D_k = one-way distance (km), Y = academic days, EF_k = emission factor (kg CO₂/veh-km)</p>
+    </div>
+
+    <!-- Boundaries -->
+    <div class="method-section">
+      <h4>Scope &amp; Boundary Disclosure</h4>
+      <div class="alert alert-info" style="margin:0;">
+        <span class="alert-icon">🔬</span>
+        <div class="text-sm">
+          <strong>Included:</strong> Tailpipe CO₂ from commuting by Cars, Motorcycles &amp; Scooters, Buses, and Other fuel-burning vehicles.<br/>
+          <strong>Excluded:</strong> EVs (zero tailpipe), Walking, Cycling, Lifecycle/upstream manufacturing emissions.
+          <span class="badge badge-assumption" style="margin-left:4px;">[Assumption]</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Anti-double-counting -->
+    <div class="method-section">
+      <h4>Anti-Double-Counting Rules</h4>
+      <ul style="padding-left:var(--sp-md); display:flex; flex-direction:column; gap:4px; list-style:disc; color:var(--text-secondary); font-size:0.875rem;">
+        <li>Each vehicle is counted once per one-way trip.</li>
+        <li>Round-trip factor (×2) is applied in VKT formula — not in raw counts.</li>
+        <li>Bicycles detected in CV are counted for observation but <strong>excluded</strong> from all emissions calculations.</li>
+        <li>Shuttle Scenario 3 explicitly separates avoided private emissions from added shuttle diesel emissions.</li>
+      </ul>
+    </div>
+
+    <!-- Emission Factors Table -->
+    <div class="method-section">
+      <h4>Active Emission Factors</h4>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Factor ID</th>
+              <th>Category</th>
+              <th>Value</th>
+              <th>Unit</th>
+              <th>Source</th>
+              <th>Year</th>
+              <th>Geography</th>
+            </tr>
+          </thead>
+          <tbody id="factor-table-tbody">
+            <tr>
+              <td colspan="7" class="text-muted text-sm" style="text-align:center; padding:var(--sp-md);">Loading…</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════ TOAST CONTAINER ═══════════════ -->
+<div class="toast-container" id="toast-container" role="alert" aria-live="polite"></div>
+
+<!-- ═══════════════ SCRIPTS ═══════════════ -->
+<script src="js/mocks.js"></script>
+<script src="js/api.js"></script>
+<script src="js/canvas_editor.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/scenarios.js"></script>
+<script src="js/app.js"></script>
+
+</body>
+</html>
