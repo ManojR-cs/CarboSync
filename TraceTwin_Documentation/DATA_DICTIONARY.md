@@ -2,8 +2,14 @@
 
 **Document Type:** Conceptual Data Dictionary & Attribute Specifications  
 **Current Stage:** Architecture & Design (Proposed for Hackathon Implementation)  
-**Last Updated:** October 15, 2026  
+**Last Updated:** October 16, 2026
 **Compliance Standard:** Strict Data Minimization (Zero Student PII in Database)  
+
+## Current B3 Persistence Boundary
+
+The backend persists assessment IDs and creation times, plus commute calculation records. The SQLite tables remain `assessments` and `commute_calculations`; validated request JSON and result JSON are saved as snapshots linked by a foreign key. New B3 snapshots include per-input activity provenance, the candidate factor snapshot or approved registry snapshot, calculation mode, method version, status, and metadata availability. The default file is repository-root `carbosync.db`; `CARBOSYNC_DATABASE_PATH` may select another file. No student-level personal information is collected or persisted.
+
+This is the implemented B3 persistence subset, not an implementation of every conceptual entity below. The current request contract remains in `BACKEND.md` Section 6. Legacy B2 JSON snapshots are unchanged; retrieval adds an explicit unavailable-metadata indicator only to the response. Parking observations, detection corrections, scenario records, and recommendations are not persisted.
 
 ---
 
@@ -12,12 +18,14 @@
 TraceTwin enforces strict privacy-by-design principles:
 1. **Zero Student Personal Data:** No student names, roll numbers, individual attendance timestamps, biometric identifiers, or residential street addresses are stored in the database.
 2. **Locality Minimization:** Geographic origins are restricted to coarse locality, ward, or postal code identifiers.
-3. **Evidence Tagging:** Every data entity and calculated output carries a mandatory provenance tag indicating its origin stream.
+3. **Evidence Tagging:** New B3 commute calculations store separate provenance for daily vehicle counts, one-way distance, and annual days. Provenance completeness does not establish factual accuracy or representativeness. Candidate factor metadata remains unapproved unless the server resolves a factor from the owner-approved registry.
 
 ---
 
 ## 2. Entity: `Assessment`
 Represents an institutional carbon accounting session, specifying the audit boundaries, academic period, and physical campus location.
+
+> **Contract boundary:** This proposed entity's `annual_days` default is not used by the current API. The B1 request requires `annual_days` explicitly and does not apply a default; see `BACKEND.md` Section 6.
 
 | Field Name | Description / Meaning | Conceptual Type | Unit | Evidence Label | Req? | Privacy Class | Validation Rule |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
@@ -67,6 +75,8 @@ Represents individual bounding-box vehicle detections extracted by the computer 
 ## 5. Entity: `AggregateCommuteInput`
 Represents modal activity parameters used by the deterministic carbon engine to compute baseline emissions.
 
+> **Contract boundary:** This is a conceptual entity. The live API shape is defined only in `BACKEND.md` Section 6. B3 implements per-input provenance, but does not implement `source_stream`, survey import, or the other proposed entity fields below.
+
 | Field Name | Description / Meaning | Conceptual Type | Unit | Evidence Label | Req? | Privacy Class | Validation Rule |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
 | `input_id` | Unique identifier for the commute record. | String (UUID) | — | `[Derived calculation]` | Yes | Non-sensitive | Regex: `^inp_[a-zA-Z0-9_-]{8,32}$` |
@@ -93,20 +103,23 @@ Represents an estimated road-route transit distance between an origin locality a
 
 ---
 
-## 7. Entity: `EmissionFactor`
-Represents a published carbon conversion factor expressing tailpipe greenhouse gas emissions per vehicle-kilometre.
+## 7. Entity: `EmissionFactor` (registry concept)
+The B3 server-controlled registry represents factors as immutable versions. Its approved registry is currently empty. Candidate request factors are snapshots, not approved registry records. No factor is independently authenticated by the application.
 
 | Field Name | Description / Meaning | Conceptual Type | Unit | Evidence Label | Req? | Privacy Class | Validation Rule |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
 | `factor_id` | Standard identifier for the factor. | String | — | `[Source-derived value]` | Yes | Non-sensitive | Regex: `^EF_[A-Z0-9_]{4,20}$` |
 | `vehicle_category`| Target vehicle class. | String (Enum) | — | `[Source-derived value]` | Yes | Non-sensitive | One of the 4 approved categories. |
 | `factor_value` | Numerical emission rate. | Float | kg CO2/veh-km | `[Source-derived value]` | Yes | Non-sensitive | Value $> 0.0$ and $\le 2.0$. |
-| `metric_scope` | Emission scope boundary. | String (Enum) | — | `[Source-derived value]` | Yes | Non-sensitive | Enum: `Tailpipe_CO2` (Default), `Direct_CO2e`. Prohibit WTT/Lifecycle. |
+| `metric_scope` | Emission scope boundary. | String (Enum) | — | `[Source-derived value]` | Yes | Non-sensitive | Live B3 calculation supports `Tailpipe_CO2` only; CO2e and lifecycle factors are not accepted. |
 | `geographic_scope`| Country / region of source data. | String | — | `[Source-derived value]` | Yes | Non-sensitive | E.g., "India (National)", "Urban Karnataka". |
 | `source_title` | Official publication title. | String | — | `[Source-derived value]` | Yes | Non-sensitive | E.g., "India GHG Program / ARAI Road Factors". |
 | `source_url` | Web URL to verified source publication. | String (URL) | — | `[Source-derived value]` | No | Non-sensitive | Valid HTTP/HTTPS URL format. |
-| `version_year` | Publication or update year. | Integer | year | `[Source-derived value]` | Yes | Non-sensitive | Integer $\ge 2000$ and $\le 2026$. |
+| `version_year` | Publication or update year. | Integer or null | year | `[Source-derived value]` | Conditional | Non-sensitive | Recorded when available; does not itself establish approval. |
 | `approximation_notes`| Disclosures on engine mix / proxy limits. | String | — | `[Assumption]` | Yes | Non-sensitive | Free-text disclosure of limitations. |
+| `version` | Immutable factor version identifier. | String | — | `[Source-derived value]` | Yes | Non-sensitive | A changed factor is a new version; historical snapshots retain the exact value and metadata used. |
+| `approval_status` | Registry governance state. | Enum | — | — | Yes | Non-sensitive | `candidate`, `approved`, or `retired`; request data cannot set this status. |
+| `review_evidence` / `owner_approval_decision` | Evidence and explicit owner decision for approval. | String or null | — | — | Required for approved | Non-sensitive | No approved factor exists until these are recorded by an explicit owner decision. |
 
 ---
 
@@ -154,3 +167,10 @@ Represents a qualitative policy recommendation generated by the Guarded AI Proxy
 | `implementation_difficulty`| Policy execution barrier. | String (Enum) | — | `[Assumption]` | Yes | Non-sensitive | Enum: `Low`, `Medium`, `High`. |
 | `fallback_flag` | Indicates whether deterministic fallback fired.| Boolean | — | `[Direct observation]` | Yes | Non-sensitive | `true` if AI failed/timed out; `false` if AI succeeded. |
 | `fallback_label` | Transparency label displayed to user. | String | — | `[Direct observation]` | Yes | Non-sensitive | Value: `"Rule-based plan (AI unavailable)"` if `fallback_flag` is true. |
+## Implemented Demo Snapshot Entities
+
+The demo API adds a SQLite demo_analyses record containing analysis_id, created_at, detections_json, assumptions_json, and result_json. These are structured aggregate demo values; no image bytes, filesystem paths, student identifiers, or LLM credentials are stored.
+
+The detection snapshot contains per-class counts, motor-vehicle and bicycle totals, model name, configured confidence, and snapshot scope. The assumptions snapshot preserves annual operating days, each class's trip-cycle and distance assumptions with descriptions, per-category illustrative factor ID/value/unit/geography/source/applicability/limitations, and the three scenario settings. Results preserve the deterministic baseline and scenario calculations, factor snapshots with backend-assigned content hashes, computed best scenario, limitations, and recommendation/fallback status.
+
+Demo factor status is always backend-assigned illustrative_unapproved. Demo records are not approved registry records. The separately implemented B3 assessment and commute tables/contracts are unchanged.

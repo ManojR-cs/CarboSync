@@ -17,6 +17,14 @@ ENV/
 *.db
 *.sqlite3
 tracetwin.db
+carbosync.db
+
+# Local ML model weights and demo artifacts
+*.pt
+*.onnx
+*.engine
+uploads/
+generated/
 
 # OS Artifacts
 .DS_Store
