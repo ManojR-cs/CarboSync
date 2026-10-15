@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from io import BytesIO
 import os
 from pathlib import Path
 import threading
 import base64
+from math import isfinite
 
 
 COCO_VEHICLE_CLASSES = {
@@ -42,6 +43,9 @@ class DetectionResult:
     annotated_image_data_uri: str
     model: str
     confidence_threshold: float
+    detections: list[dict[str, object]] = field(default_factory=list)
+    class_mapping: dict[str, list[int]] = field(default_factory=dict)
+    unmapped_vehicle_categories: list[str] = field(default_factory=list)
 
 
 def validate_image_bytes(data: bytes, declared_content_type: str | None) -> ValidatedImage:
@@ -107,6 +111,37 @@ def count_coco_vehicle_classes(class_ids: list[int]) -> dict[str, int]:
     return counts
 
 
+_CANONICAL_CLASS_NAMES = {
+    "bicycle": "bicycle",
+    "bike": "bicycle",
+    "car": "car",
+    "motorcycle": "motorcycle",
+    "motorbike": "motorcycle",
+    "bus": "bus",
+    "truck": "truck",
+}
+
+
+def resolve_vehicle_class_ids(class_names: dict | list | tuple) -> dict[int, str]:
+    """Map actual model labels to supported vehicle categories.
+
+    COCO IDs are used only by the COCO fixture/helper. For inference, use the
+    names loaded from the configured model so custom class ordering is safe.
+    """
+    items = class_names.items() if isinstance(class_names, dict) else enumerate(class_names)
+    mapped: dict[int, str] = {}
+    for raw_id, raw_name in items:
+        try:
+            class_id = int(raw_id)
+        except (TypeError, ValueError):
+            continue
+        name = str(raw_name).strip().lower().replace("_", " ")
+        category = _CANONICAL_CLASS_NAMES.get(name)
+        if category:
+            mapped[class_id] = category
+    return mapped
+
+
 _model_lock = threading.Lock()
 _inference_lock = threading.Lock()
 _loaded_model = None
@@ -116,6 +151,10 @@ _loaded_model_path: Path | None = None
 def _load_model():
     global _loaded_model, _loaded_model_path
     path = _configured_model_path()
+    if path.suffix.lower() != ".pt":
+        raise DetectionUnavailable(
+            "The configured detector must be an Ultralytics PyTorch .pt weights file."
+        )
     if not path.is_file():
         raise DetectionUnavailable(
             "YOLO11n weights are unavailable. Set CARBOSYNC_YOLO_MODEL_PATH to a local model file."
@@ -126,7 +165,7 @@ def _load_model():
                 from ultralytics import YOLO
             except ImportError as exc:
                 raise DetectionUnavailable(
-                    "YOLO runtime is unavailable; install the declared backend dependencies."
+                    "YOLO runtime is unavailable; install requirements-yolo.txt."
                 ) from exc
             try:
                 _loaded_model = YOLO(str(path))
@@ -147,8 +186,49 @@ def detect_vehicle_image(image: object) -> DetectionResult:
                 verbose=False,
                 device="cpu",
             )[0]
-            class_ids = result.boxes.cls.tolist() if result.boxes is not None else []
-            counts = count_coco_vehicle_classes(class_ids)
+            actual_names = getattr(result, "names", None) or getattr(model, "names", None)
+            if actual_names is None:
+                raise DetectionUnavailable(
+                    "The configured model does not expose class names; vehicle classes cannot be verified."
+                )
+            class_mapping = resolve_vehicle_class_ids(actual_names)
+            if not class_mapping:
+                raise DetectionUnavailable(
+                    "The configured model has no recognized bicycle, car, motorcycle, bus, or truck classes."
+                )
+            boxes = result.boxes
+            class_ids = boxes.cls.tolist() if boxes is not None else []
+            confidences = boxes.conf.tolist() if boxes is not None else []
+            normalized_boxes = boxes.xyxyn.tolist() if boxes is not None else []
+            counts = {name: 0 for name in COCO_VEHICLE_CLASSES.values()}
+            details: list[dict[str, object]] = []
+            for class_id, confidence, coordinates in zip(
+                class_ids, confidences, normalized_boxes
+            ):
+                class_id_int = int(class_id)
+                category = class_mapping.get(class_id_int)
+                if category is None:
+                    continue
+                confidence_value = float(confidence)
+                if not isfinite(confidence_value) or not 0 <= confidence_value <= 1:
+                    continue
+                x1, y1, x2, y2 = (float(value) for value in coordinates)
+                if not all(isfinite(value) for value in (x1, y1, x2, y2)):
+                    continue
+                counts[category] += 1
+                details.append(
+                    {
+                        "class_id": class_id_int,
+                        "category": category,
+                        "confidence": confidence_value,
+                        "bounding_box_normalized": {
+                            "x_min": max(0.0, min(1.0, x1)),
+                            "y_min": max(0.0, min(1.0, y1)),
+                            "x_max": max(0.0, min(1.0, x2)),
+                            "y_max": max(0.0, min(1.0, y2)),
+                        },
+                    }
+                )
             plotted = result.plot()
             # Ultralytics returns a BGR NumPy array; Pillow expects RGB.
             from PIL import Image
@@ -162,9 +242,23 @@ def detect_vehicle_image(image: object) -> DetectionResult:
     except Exception as exc:
         raise DetectionUnavailable("Vehicle detection could not be completed.") from exc
     data_uri = "data:image/jpeg;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
+    configured_name = _configured_model_path().name
+    model_label = (
+        "YOLO11n"
+        if configured_name.lower() == "yolo11n.pt"
+        else f"Custom YOLO model ({configured_name})"
+    )
+    category_class_ids: dict[str, list[int]] = {}
+    for class_id, category in class_mapping.items():
+        category_class_ids.setdefault(category, []).append(class_id)
     return DetectionResult(
         counts=counts,
         annotated_image_data_uri=data_uri,
-        model="YOLO11n",
+        model=model_label,
         confidence_threshold=threshold,
+        detections=details,
+        class_mapping=category_class_ids,
+        unmapped_vehicle_categories=sorted(
+            set(COCO_VEHICLE_CLASSES.values()) - set(class_mapping.values())
+        ),
     )

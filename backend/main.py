@@ -379,7 +379,10 @@ async def http_error_handler(_, exc: StarletteHTTPException) -> JSONResponse:
         if exc.detail == "Approved factors unavailable":
             message = "Approved emission factors are currently unavailable."
         else:
-            message = "Vehicle detection is currently unavailable."
+            message = (
+                "Vehicle detection requires the optional YOLO dependencies and "
+                "a compatible local weights file."
+            )
     else:
         message = messages.get(
             exc.status_code,
@@ -633,24 +636,65 @@ async def analyze_demo_image(
         validated_image = validate_image_bytes(image_bytes, content_type)
     except ImageInputError as exc:
         raise HTTPException(status_code=422, detail="Uploaded file is not a valid supported image") from exc
-    try:
-        detections = await run_in_threadpool(
-            detect_vehicle_image,
-            validated_image.image,
-        )
-    except DetectionUnavailable as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    if request.detection_mode == "simulated":
+        counts = request.simulated_detection_counts
+        detection_details: list[dict[str, object]] = []
+        detection_mode = "simulated"
+        model_metadata: dict[str, object] = {
+            "name": "Simulated detections",
+            "confidence_threshold": None,
+            "class_mapping": {},
+            "unmapped_vehicle_categories": [],
+        }
+        annotated_image_data_uri = None
+        warnings = [
+            "Simulated mode was selected; the uploaded image was not analyzed."
+        ]
+    else:
+        try:
+            detections = await run_in_threadpool(
+                detect_vehicle_image,
+                validated_image.image,
+            )
+        except DetectionUnavailable as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        counts = detections.counts
+        detection_details = detections.detections
+        detection_mode = "real"
+        model_metadata = {
+            "name": detections.model,
+            "confidence_threshold": detections.confidence_threshold,
+            "class_mapping": detections.class_mapping,
+            "unmapped_vehicle_categories": detections.unmapped_vehicle_categories,
+        }
+        annotated_image_data_uri = detections.annotated_image_data_uri
+        warnings = []
+        if detections.unmapped_vehicle_categories:
+            warnings.append(
+                "The configured model does not contain every supported vehicle class; "
+                "see unmapped_vehicle_categories before interpreting zero counts."
+            )
 
-    counts = detections.counts
     motor_total = sum(counts[name] for name in ("car", "motorcycle", "bus", "truck"))
     detected = {
+        "mode": detection_mode,
+        "simulated": detection_mode == "simulated",
         "per_class": counts,
+        "details": detection_details,
         "motor_vehicle_total": motor_total,
         "bicycle_total": counts["bicycle"],
         "all_vehicle_total": sum(counts.values()),
-        "observation_scope": "single_image_snapshot",
-        "model": detections.model,
-        "confidence_threshold": detections.confidence_threshold,
+        "observation_scope": (
+            "user_supplied_simulation"
+            if detection_mode == "simulated"
+            else "single_image_snapshot"
+        ),
+        "model": model_metadata["name"],
+        "confidence_threshold": model_metadata["confidence_threshold"],
+        "class_mapping": model_metadata["class_mapping"],
+        "unmapped_vehicle_categories": model_metadata[
+            "unmapped_vehicle_categories"
+        ],
     }
     request_data = request.model_dump(mode="json")
     try:
@@ -665,6 +709,14 @@ async def analyze_demo_image(
         calculation,
     )
     calculation["recommendations"] = recommendation
+    calculation["warnings"] = warnings
+    if detection_mode == "simulated":
+        calculation["evidence_label"] = (
+            "Simulated detection counts combined with explicit illustrative assumptions"
+        )
+        calculation["limitations"].append(
+            "Simulated detections are user-supplied demo counts, not image detections."
+        )
     analysis_id = f"demo_{uuid.uuid4().hex}"
     created_at = utc_timestamp()
     save_demo_analysis(
@@ -677,12 +729,15 @@ async def analyze_demo_image(
     return {
         "analysis_id": analysis_id,
         "created_at": created_at,
+        "detection_mode": detection_mode,
         "detections": detected,
         "model": {
-            "name": detections.model,
-            "confidence_threshold": detections.confidence_threshold,
+            **model_metadata,
+            "detection_mode": detection_mode,
+            "simulated": detection_mode == "simulated",
         },
-        "annotated_image_data_uri": detections.annotated_image_data_uri,
+        "detection_details": detection_details,
+        "annotated_image_data_uri": annotated_image_data_uri,
         "result": calculation,
     }
 

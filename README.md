@@ -84,6 +84,7 @@ All planning, architectural, and mathematical specifications are organized insid
 | ✅ [VALIDATION_SUMMARY.md](TraceTwin_Documentation/VALIDATION_SUMMARY.md) | Historical pre-implementation consistency review; not current release evidence. |
 | 💻 [FRONTEND.md](TraceTwin_Documentation/FRONTEND.md) | Dedicated frontend task breakdown (F-01 to F-10), UI layouts, Canvas editor specs, design tokens, and mock fixtures. |
 | ⚙️ [BACKEND.md](TraceTwin_Documentation/BACKEND.md) | Authoritative current API contract, implemented backend behavior, and clearly marked future backend tasks. |
+| 🧰 [BACKEND_SETUP.md](BACKEND_SETUP.md) | Portable Windows setup, local YOLO configuration, and React API integration examples. |
 
 ---
 
@@ -93,7 +94,7 @@ All planning, architectural, and mathematical specifications are organized insid
 
 ```mermaid
 graph TD
-    UI[Frontend: Vanilla HTML5 / Modern CSS / JavaScript ES6] -->|REST API Requests| API[Backend: FastAPI Python 3.11]
+    UI[External React frontend; not included here] -->|REST API Requests| API[Backend: FastAPI Python 3.11/3.12]
     API -->|Local optional inference| CV[YOLO11n service; local weights required]
     API -->|Deterministic Calculations| ENG[Deterministic Carbon Engine]
     API -->|Illustrative deterministic scenarios| TWIN[Demo scenario engine]
@@ -103,10 +104,10 @@ graph TD
     UI -->|Visualization| CHARTS[Chart.js / Canvas Overlays]
 ```
 
-- **Frontend Client:** Lightweight Vanilla HTML5, modern custom CSS (clean dark mode, responsive flex/grid layouts), and native JavaScript (ES6+). Zero heavy frontend frameworks (no React/Next.js/Angular) to guarantee rapid live development, zero build-step overhead, and instant browser debugging.
+- **Frontend Client:** No frontend application source is present in this repository. An external React client can use the documented multipart and retrieval APIs; see [BACKEND_SETUP.md](BACKEND_SETUP.md). Older frontend architecture proposals are not implementation evidence.
 - **Data Visualizations:** Chart.js for interactive emission breakdown charts and scenario comparisons; HTML5 Canvas for bounding box rendering and human verification.
-- **Backend Application Server:** Python 3.11 with FastAPI and Uvicorn. Provides asynchronous request handling, automated OpenAPI documentation, Pydantic type safety, and seamless Python ML integration.
-- **Computer Vision Pipeline:** An optional Ultralytics YOLO11n service maps COCO vehicle classes. The repository has no model weights; it does not download them. A missing model/runtime produces a safe 503.
+- **Backend Application Server:** Python 3.11 or 3.12 with FastAPI and Uvicorn. Provides asynchronous request handling, automated OpenAPI documentation, Pydantic type safety, and local Python ML integration.
+- **Computer Vision Pipeline:** An optional Ultralytics `.pt` service reads the configured model's class names instead of assuming custom weights use COCO IDs. The repository has no model weights; it does not download them. A missing model/runtime produces an actionable safe 503.
 - **Persistence Tier:** Standard-library sqlite3 stores assessment/calculation snapshots and structured demo detections, assumptions, scenarios, and recommendation status. Uploaded and annotated images are not persisted.
 - **Guarded Generative AI:** Optional OpenAI-compatible API adapter with environment-based credentials, a four-second timeout, response validation, and deterministic fallback. The image is never sent.
 
@@ -139,17 +140,6 @@ graph TD
 
 ## Local judges' demo backend
 
-From the repository root, create or use the project virtual environment and install the declared dependencies:
+For a fresh Windows clone, use [BACKEND_SETUP.md](BACKEND_SETUP.md). The core install does not install the large optional YOLO/PyTorch runtime. If a compatible YOLO environment already exists, the setup and run scripts can use its Python interpreter. No model weights are bundled or downloaded automatically.
 
-    python -m venv .venv
-    & '.\.venv\Scripts\python.exe' -m pip install -r requirements.txt
-
-Ultralytics and its inference dependencies can take substantial disk space. YOLO11n weights are not included; provide an authorized local file and set CARBOSYNC_YOLO_MODEL_PATH, or use backend/models/yolo11n.pt. Model weights are ignored by Git and never downloaded by the application.
-
-Run from the repository root:
-
-    & '.\.venv\Scripts\python.exe' -m uvicorn backend.main:app --reload
-
-Open /docs and use POST /api/demo/analyze with an image file and an assumptions_json multipart field. The complete JSON example, environment variables, formula, editable scenarios, response fields, and limitations are in BACKEND.md, Section 7.
-
-The demo uses explicit, caller-supplied illustrative factors and activity assumptions. Results are unapproved estimates based on a point-in-time image plus assumptions; they do not establish daily traffic, occupancy, fuel, distance, or verified campus emissions. With no LLM key, rule-based recommendations are returned.
+The authoritative routes and payload fields are in [`TraceTwin_Documentation/BACKEND.md`](TraceTwin_Documentation/BACKEND.md). `/api/demo/analyze` supports clearly separated real and simulated detection modes. Both produce illustrative, unapproved emissions estimates from explicit assumptions; a parking snapshot does not establish daily traffic or verified campus emissions. Recommendations fall back deterministically when no LLM key is configured.

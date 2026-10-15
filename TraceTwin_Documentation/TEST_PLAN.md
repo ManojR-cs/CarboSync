@@ -191,7 +191,7 @@ The following hand-calculated test cases serve as absolute numerical benchmarks 
 | **T-E2E-01** | **Complete Live 4-Minute Hackathon Demo**<br>*Precondition:* Clean database, server running on laptop. | 1. Create Assessment "DSU North Gate 2026"<br>2. Upload parking snapshot image<br>3. Review detections in Canvas; delete 1 false positive, reclassify 1 auto-rickshaw<br>4. Confirm verification<br>5. Enter commute survey inputs ($n=18$)<br>6. View baseline emissions chart with evidence tags<br>7. Adjust Carpooling and Shuttle sliders<br>8. View guarded AI recommendations with attached deterministic numbers<br>9. Simulate network cutoff; verify rule-based fallback renders within 4s. | Full user journey executes flawlessly in under 4 minutes with zero uncaught exceptions, zero console errors, and clean evaluator presentation. | `Planned` | *Pending live test execution* |
 ## Implemented Judges' Demo Regression Tests (2026-10-16)
 
-The demo-specific tests are in tests/test_demo_api.py. They exercise multipart ASGI requests with mocked detection and LLM providers, temporary SQLite files, image decoding, COCO mapping, model caching, missing-weight behavior, estimate/scenario arithmetic, factor/unit/range validation, persistence/retrieval, provider timeout/schema rejection, and safe API errors.
+The demo-specific tests are in `tests/test_demo_api.py`. They exercise multipart ASGI requests with mocked detection and LLM providers, temporary SQLite files, image decoding, COCO fixture mapping, model-name-based custom class mapping, model caching, missing-weight behavior, explicitly simulated detections, estimate/scenario arithmetic, factor/unit/range validation, persistence/retrieval, provider timeout/schema rejection, and safe API errors. These mocked tests do not verify real model inference.
 
 Observed commands from the repository root using the existing virtual environment:
 
@@ -202,9 +202,9 @@ Observed commands from the repository root using the existing virtual environmen
     Result: 32 passed, exit 0.
 
     & '.\.venv\Scripts\python.exe' -B -m unittest tests.test_demo_api -v
-    Result: 12 passed, exit 0.
+    Result: 15 passed, exit 0.
 
     & '.\.venv\Scripts\python.exe' -B -m unittest discover -s tests -v
-    Result: 57 passed, 0 failures, 0 errors, exit 0.
+    Result: 60 passed, 0 failures, 0 errors, exit 0.
 
-The test suite does not prove the real model's accuracy or a live external LLM call. Those require locally provisioned model weights and optional provider credentials.
+The tests use mocks and do not prove the real model's accuracy or a live external LLM call. Those require locally provisioned model weights and optional provider credentials. The current detector tests confirm class-name-based mapping for custom class ordering and verify that simulated counts do not invoke the detector. Actual inference must be verified on each laptop with that laptop's selected weights and image.

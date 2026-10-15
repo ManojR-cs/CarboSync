@@ -24,6 +24,7 @@ from backend.vehicle_detection import (
     ImageInputError,
     count_coco_vehicle_classes,
     detect_vehicle_image,
+    resolve_vehicle_class_ids,
     validate_image_bytes,
 )
 
@@ -177,6 +178,20 @@ class DemoApiTests(unittest.TestCase):
             "data:image/jpeg;base64,dGVzdA==",
             "YOLO11n",
             0.35,
+            detections=[
+                {
+                    "class_id": 2,
+                    "category": "car",
+                    "confidence": 0.91,
+                    "bounding_box_normalized": {
+                        "x_min": 0.1,
+                        "y_min": 0.2,
+                        "x_max": 0.3,
+                        "y_max": 0.4,
+                    },
+                }
+            ],
+            class_mapping={"bicycle": [1], "car": [2], "motorcycle": [3], "bus": [5], "truck": [7]},
         )
         with patch("backend.main.detect_vehicle_image", return_value=detection):
             status, response, _ = self.request()
@@ -184,6 +199,9 @@ class DemoApiTests(unittest.TestCase):
         self.assertEqual(response["detections"]["motor_vehicle_total"], 14)
         self.assertEqual(response["detections"]["bicycle_total"], 3)
         self.assertEqual(response["model"]["confidence_threshold"], 0.35)
+        self.assertEqual(response["detection_mode"], "real")
+        self.assertEqual(response["detection_details"][0]["category"], "car")
+        self.assertEqual(response["detections"]["details"], response["detection_details"])
         result = response["result"]
         self.assertEqual(result["approval_status"], "illustrative_unapproved")
         self.assertFalse(result["independently_verified"])
@@ -203,6 +221,11 @@ class DemoApiTests(unittest.TestCase):
         )
         self.assertEqual(status, 200)
         self.assertEqual(saved["detections"]["per_class"], FIXTURE_COUNTS)
+        self.assertEqual(saved["detections"]["details"], response["detection_details"])
+        self.assertEqual(
+            saved["detections"]["class_mapping"],
+            {"bicycle": [1], "car": [2], "motorcycle": [3], "bus": [5], "truck": [7]},
+        )
         self.assertEqual(saved["result"]["baseline"], result["baseline"])
         self.assertIn("illustrative_factors", saved["assumptions"])
         self.assertNotIn("annotated_image_data_uri", json.dumps(saved))
@@ -236,7 +259,16 @@ class DemoApiTests(unittest.TestCase):
         ):
             status, body, _ = self.request()
         self.assertEqual(status, 503)
-        self.assertEqual(body, {"error": True, "message": "Vehicle detection is currently unavailable."})
+        self.assertEqual(
+            body,
+            {
+                "error": True,
+                "message": (
+                    "Vehicle detection requires the optional YOLO dependencies and "
+                    "a compatible local weights file."
+                ),
+            },
+        )
         self.assertNotIn(self.temp_directory.name, json.dumps(body))
         self.assertFalse(missing_path.exists(), "the service must not download weights")
 
@@ -265,6 +297,34 @@ class DemoApiTests(unittest.TestCase):
         )
         self.assertEqual(status, 404)
         self.assertEqual(body, {"error": True, "message": "Resource not found."})
+
+    def test_simulated_detection_is_explicit_and_never_calls_yolo(self):
+        assumptions = demo_request()
+        assumptions["detection_mode"] = "simulated"
+        assumptions["simulated_detection_counts"] = FIXTURE_COUNTS
+        assumptions["simulated_detection_source_description"] = (
+            "Synthetic counts for a presentation walkthrough."
+        )
+        with patch("backend.main.detect_vehicle_image") as detect:
+            status, response, _ = self.request(assumptions=assumptions)
+        self.assertEqual(status, 201)
+        detect.assert_not_called()
+        self.assertTrue(response["detections"]["simulated"])
+        self.assertEqual(response["detections"]["mode"], "simulated")
+        self.assertEqual(
+            response["detections"]["observation_scope"], "user_supplied_simulation"
+        )
+        self.assertEqual(response["detections"]["per_class"], FIXTURE_COUNTS)
+        self.assertIsNone(response["annotated_image_data_uri"])
+        self.assertIn("not analyzed", response["result"]["warnings"][0])
+        self.assertIn("Simulated detection counts", response["result"]["evidence_label"])
+
+    def test_simulated_mode_requires_explicit_complete_counts(self):
+        assumptions = demo_request()
+        assumptions["detection_mode"] = "simulated"
+        status, body, _ = self.request(assumptions=assumptions)
+        self.assertEqual(status, 422)
+        self.assertEqual(body, {"error": True, "message": "Request validation failed."})
 
 
 class DemoCalculationTests(unittest.TestCase):
@@ -398,6 +458,14 @@ class RecommendationTests(unittest.TestCase):
 
 
 class ImageValidationTests(unittest.TestCase):
+    def test_custom_model_labels_map_by_name_not_coco_id(self):
+        self.assertEqual(
+            resolve_vehicle_class_ids(
+                {0: "truck", 1: "person", 2: "bike", 3: "motorbike", 4: "bus"}
+            ),
+            {0: "truck", 2: "bicycle", 3: "motorcycle", 4: "bus"},
+        )
+
     def test_readable_image_and_mime_content_match(self):
         try:
             result = validate_image_bytes(PNG_1X1, "image/png")
@@ -418,12 +486,36 @@ class ImageValidationTests(unittest.TestCase):
             prior_model = detector_module._loaded_model
             prior_model_path = detector_module._loaded_model_path
             fake_model = MagicMock()
-            boxes = SimpleNamespace(cls=SimpleNamespace(tolist=lambda: [1, 2, 2, 3, 5, 7]))
+            boxes = SimpleNamespace(
+                cls=SimpleNamespace(tolist=lambda: [2, 0, 2, 3, 5, 4]),
+                conf=SimpleNamespace(tolist=lambda: [0.9, 0.8, 0.7, 0.6, 0.5, 0.4]),
+                xyxyn=SimpleNamespace(
+                    tolist=lambda: [
+                        [0.1, 0.2, 0.3, 0.4],
+                        [0.2, 0.3, 0.4, 0.5],
+                        [0.3, 0.4, 0.5, 0.6],
+                        [0.4, 0.5, 0.6, 0.7],
+                        [0.5, 0.6, 0.7, 0.8],
+                        [0.6, 0.7, 0.8, 0.9],
+                    ]
+                ),
+            )
             class ArrayLike:
                 def __getitem__(self, _key):
                     return self
 
-            fake_result = SimpleNamespace(boxes=boxes, plot=ArrayLike)
+            fake_result = SimpleNamespace(
+                boxes=boxes,
+                names={
+                    0: "car",
+                    1: "person",
+                    2: "bicycle",
+                    3: "motorcycle",
+                    4: "truck",
+                    5: "bus",
+                },
+                plot=ArrayLike,
+            )
             fake_model.predict.return_value = [fake_result]
             fake_yolo = MagicMock(return_value=fake_model)
             fake_annotated = MagicMock()
@@ -453,8 +545,16 @@ class ImageValidationTests(unittest.TestCase):
 
         self.assertEqual(
             first.counts,
-            {"bicycle": 1, "car": 2, "motorcycle": 1, "bus": 1, "truck": 1},
+            {"bicycle": 2, "car": 1, "motorcycle": 1, "bus": 1, "truck": 1},
         )
+        self.assertEqual(first.detections[0]["category"], "bicycle")
+        self.assertEqual(first.detections[0]["class_id"], 2)
+        self.assertEqual(first.detections[0]["bounding_box_normalized"]["x_min"], 0.1)
+        self.assertEqual(
+            first.class_mapping,
+            {"car": [0], "bicycle": [2], "motorcycle": [3], "truck": [4], "bus": [5]},
+        )
+        self.assertEqual(first.unmapped_vehicle_categories, [])
         self.assertEqual(first.confidence_threshold, 0.42)
         self.assertTrue(first.annotated_image_data_uri.startswith("data:image/jpeg;base64,"))
         self.assertEqual(second.counts, first.counts)

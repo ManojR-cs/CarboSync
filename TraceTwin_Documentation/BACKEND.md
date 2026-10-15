@@ -450,7 +450,7 @@ Handled errors use `{"error":true,"message":"..."}` and do not expose rejected v
 
 ### CORS
 
-`CARBOSYNC_CORS_ORIGINS` accepts comma-separated origins, trimming whitespace and ignoring empty entries. Defaults are `http://localhost:5500` and `http://127.0.0.1:5500`; there is no wildcard default. Credentials are disabled, methods are `GET`, `POST`, and `OPTIONS`, and headers are `Content-Type` and `Authorization`.
+`CARBOSYNC_CORS_ORIGINS` accepts comma-separated origins, trimming whitespace and ignoring empty entries. Defaults are `http://localhost:5500` and `http://127.0.0.1:5500`; there is no wildcard default. Credentials are disabled, methods are `GET`, `POST`, and `OPTIONS`, and headers are `Content-Type` and `Authorization`. The sample `.env.example` uses common Vite development origins on port 5173; change them to the exact frontend origin. That sample does not verify the React app's actual port. Configure the value before starting the server because CORS middleware reads it at application startup.
 
 ### Boundaries and planned work
 
@@ -462,7 +462,7 @@ This flow is separate from the B3 approved/candidate assessment API. It never in
 
 ### POST /api/demo/analyze
 
-Send multipart/form-data with image (JPEG, PNG, or WebP, at most 10 MiB and 40 megapixels) and assumptions_json (a JSON string). Every assumption and all four motor-category factors are required; the endpoint has no silent factor defaults.
+This endpoint returns HTTP `201` on success. Send multipart/form-data with image (JPEG, PNG, or WebP, at most 10 MiB and 40 megapixels) and assumptions_json (a JSON string). Every activity assumption and all four motor-category factors are required; the endpoint has no silent factor defaults. `detection_mode` is `real` by default. The optional `simulated` mode requires the complete `simulated_detection_counts` map and `simulated_detection_source_description`; it never invokes YOLO and is visibly labeled simulated. The uploaded image is validated but not analyzed in simulated mode.
 
 Example assumptions_json form value:
 
@@ -494,9 +494,9 @@ Example assumptions_json form value:
 
 The request rejects missing categories/factors, unsupported units, non-finite or out-of-range values, mismatched factor categories, invalid shares, and blank assumption descriptions. Backend status is fixed to illustrative_unapproved. Caller-provided factor IDs and values are demo settings only and cannot confer approval.
 
-COCO class IDs map to 1 bicycle, 2 car, 3 motorcycle, 5 bus, and 7 truck. Other classes are ignored. The response includes per-class counts, motor-vehicle and bicycle totals, model name, confidence threshold, and an annotated JPEG data URI. No filesystem path is returned. The upload is validated and closed; source and annotated images are not stored.
+For standard COCO model labels, IDs are 1 bicycle, 2 car, 3 motorcycle, 5 bus, and 7 truck. Inference resolves labels from the configured model's actual `names` table; custom models are not assumed to use COCO ID ordering. Recognized labels include bicycle/bike, car, motorcycle/motorbike, bus, and truck. The response reports `class_mapping` and `unmapped_vehicle_categories`; an absent category must not be interpreted as a measured zero. Unknown classes are ignored. `detections.details` and the top-level `detection_details` contain category, model class ID, confidence, and normalized bounding-box coordinates. The response includes counts, model/confidence metadata, and an annotated JPEG data URI for real mode. No filesystem path is returned. Simulated mode returns no annotation and includes a warning that the uploaded image was not analyzed. The upload is validated and closed; source and annotated images are not stored.
 
-Validation checks MIME/content agreement, readability, a 10 MiB limit, and dimensions up to 40 megapixels. A request-body guard caps multipart overhead before file spooling. The model loads lazily once per process and is reused. Default local weights path: backend/models/yolo11n.pt. Override with CARBOSYNC_YOLO_MODEL_PATH. Weights are not included or automatically downloaded. Missing weights/runtime return safe HTTP 503. CARBOSYNC_YOLO_CONFIDENCE defaults to 0.35 and must be in (0, 1].
+Validation checks MIME/content agreement, readability, a 10 MiB limit, and dimensions up to 40 megapixels. A request-body guard caps multipart overhead before file spooling. The model loads lazily once per process and is reused. Supported inference weights are Ultralytics PyTorch `.pt` files. Default local weights path: `backend/models/yolo11n.pt`. Override with `CARBOSYNC_YOLO_MODEL_PATH`; only the configured filename label, never its filesystem path, may appear in metadata. Weights are not included or automatically downloaded. Missing weights/runtime return safe HTTP 503 with an actionable setup message. `CARBOSYNC_YOLO_CONFIDENCE` defaults to `0.35` and must be in `(0, 1]`.
 
 ### Calculation and scenarios
 
@@ -512,12 +512,14 @@ The three simulations reuse the same deterministic estimate service: carpool act
 
 ### GET /api/demo/analyses/{analysis_id}
 
-Returns persisted ID, UTC time, structured detection/model metadata, submitted assumptions/factors, baseline, scenarios, and recommendation status. Unknown IDs return safe 404. An additive SQLite demo_analyses table stores JSON snapshots only; images and secrets are not stored.
+Returns HTTP `200` with the persisted ID, UTC time, structured detection/model metadata, submitted assumptions/factors, baseline, scenarios, and recommendation status. Unknown IDs return safe `404`. An additive SQLite `demo_analyses` table stores JSON snapshots only; images and secrets are not stored. The response does not include the annotated-image data URI.
+
+For image upload errors, unsupported MIME types return `415`, unreadable/mismatched image content or invalid assumptions return `422`, oversized uploads return `413`, and unavailable detector runtime/weights return safe actionable `503`. Handled failures keep the documented `{"error":true,"message":"..."}` envelope.
 
 ### Recommendations and configuration
 
 Missing credentials, timeout, provider errors, or invalid output activate deterministic fallback recommendations with fallback_flag true and label “Rule-based plan (AI unavailable)”. Optional OpenAI-compatible Chat Completions configuration uses CARBOSYNC_LLM_PROVIDER=openai_compatible, CARBOSYNC_LLM_API_KEY, CARBOSYNC_LLM_BASE_URL, and CARBOSYNC_LLM_MODEL. Default model is gpt-4o-mini; timeout is four seconds. HTTPS is required except localhost. The provider receives structured metrics and assumptions, never the image. The backend supplies the computed best scenario and rejects numeric or citation claims in generated prose. Keys are never returned or persisted. Live provider behavior has not been verified without credentials.
 
-### Local setup
+### Portable local setup
 
-Install requirements.txt into the project virtual environment. Provide an authorized YOLO11n weight file locally at backend/models/yolo11n.pt or set CARBOSYNC_YOLO_MODEL_PATH; installing packages does not download model weights. Set CARBOSYNC_DATABASE_PATH for a writable SQLite file and CARBOSYNC_CORS_ORIGINS for browser origins. Start using the project interpreter with uvicorn backend.main:app --reload, then inspect or call the endpoint at /docs.
+See the root `BACKEND_SETUP.md` for supported Python versions, the Windows setup/run scripts, core versus optional YOLO installation, `.env.example`, actual CORS configuration, React `fetch` example, response example, and manual smoke-test steps. The core `requirements.txt` excludes heavyweight Ultralytics/PyTorch. Install `requirements-yolo.txt` only in the interpreter used for real YOLO inference. An existing compatible YOLO environment can be selected directly; model weights remain a separate local file and are never automatically downloaded.

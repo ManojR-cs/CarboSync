@@ -125,6 +125,9 @@ class ScenarioAssumptions(DemoModel):
 
 
 class DemoAnalysisRequest(DemoModel):
+    detection_mode: Literal["real", "simulated"] = "real"
+    simulated_detection_counts: dict[VehicleClass, Annotated[StrictInt, Field(ge=0, le=100000)]] | None = None
+    simulated_detection_source_description: Annotated[str, Field(min_length=1, max_length=500)] | None = None
     annual_operating_days: Annotated[StrictInt, Field(ge=1, le=366)]
     annual_days_source_description: Annotated[str, Field(min_length=1, max_length=500)]
     vehicle_assumptions: dict[VehicleClass, VehicleAssumption]
@@ -149,4 +152,16 @@ class DemoAnalysisRequest(DemoModel):
         for category, factor in self.illustrative_factors.items():
             if factor.vehicle_category != category:
                 raise ValueError("illustrative factor category must match its map key")
+        if self.detection_mode == "simulated":
+            if self.simulated_detection_counts is None:
+                raise ValueError("simulated mode requires simulated_detection_counts")
+            if set(self.simulated_detection_counts) != vehicle_keys:
+                raise ValueError("simulated_detection_counts must define all five classes")
+            if not self.simulated_detection_source_description:
+                raise ValueError("simulated mode requires a source description")
+        elif (
+            self.simulated_detection_counts is not None
+            or self.simulated_detection_source_description is not None
+        ):
+            raise ValueError("simulated detection fields require simulated mode")
         return self
