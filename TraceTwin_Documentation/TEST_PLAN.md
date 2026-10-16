@@ -1,14 +1,40 @@
 # Master Verification & Test Plan — TraceTwin
 
 **Document Type:** Formal Test Suite & Quality Assurance Protocol  
-**Current Stage:** Planning & Pre-Hackathon Verification  
-**Last Updated:** October 15, 2026  
+**Current Stage:** B1–B3 and judges' demo backend regression suites executed; remaining product-wide tests are planned
+**Last Updated:** October 16, 2026
 **Auditor:** TraceTwin Quality Assurance Lead  
 
 > [!IMPORTANT]
-> **Execution Status Notice:** In compliance with the Code Clash 2.0 hackathon code-writing constraints, **no functional code has been authored or executed prior to the hackathon**.
+> **Historical planning note:** This document was drafted before the current backend source and tests existed. Its product-wide cases below are planning guidance, not evidence that those features exist or have been tested.
 > 
-> All test cases below are designated as **`Planned` / `Untested`**. During the active hackathon, the team will execute these tests against the live code, logging actual outputs and marking them `Passed` or `Failed` only upon physical execution.
+> The two current executable suites are `tests.test_carbon_engine` and `tests.test_commute_api`. Their latest run evidence is recorded in `STATUS.md`. Cases for absent frontend, CV, scenario, and AI components remain `Planned`; the B2 persistence verification below is implemented and executed.
+
+### Historical B2 Persistence Verification Record (2026-10-15)
+
+The API tests use a fresh `TemporaryDirectory` SQLite file for each test through `CARBOSYNC_DATABASE_PATH`; they do not use the development database. Coverage includes assessment creation/retrieval, persistence and reload, unknown IDs, empty calculation collections, invalid-input non-persistence, an injected SQLite insert failure, foreign-key enforcement, path isolation, health, `/docs`, safe B1 errors/CORS, and corrupted persisted JSON.
+
+Observed commands and results:
+
+| Command | Result |
+| :--- | :--- |
+| `& '.\.venv\Scripts\python.exe' -B -m unittest tests.test_carbon_engine -v` | Passed: 13 tests, exit code 0. |
+| `& '.\.venv\Scripts\python.exe' -B -m unittest tests.test_commute_api -v` | Passed: 19 tests, exit code 0. |
+| `& '.\.venv\Scripts\python.exe' -B -m unittest discover -v` | No tests discovered, exit code 1; root discovery does not recurse into this non-package `tests` directory. |
+| `& '.\.venv\Scripts\python.exe' -B -m unittest discover -s tests -v` | Passed: 32 tests, exit code 0. |
+
+A live local Uvicorn check using a temporary database returned the documented health, docs, create, commute, retrieval, 404, and 422 responses. The saved test-fixture calculation remained retrievable after stopping and restarting the server with the same database path. This confirms B2 persistence only; product-wide CV, review, scenario, AI, and frontend cases below remain planned.
+
+### B3 Provenance and Factor-Governance Verification (2026-10-16)
+
+Observed after B3 implementation:
+
+| Command | Result |
+| :--- | :--- |
+| `& '.\.venv\Scripts\python.exe' -B -m unittest tests.test_commute_api -v` | Passed: 32 tests, exit code 0. |
+| `& '.\.venv\Scripts\python.exe' -B -m unittest discover -s tests -v` | Passed: 45 tests, exit code 0 (13 engine and 32 API). |
+
+B3 API coverage checks required mode selection, rejection of the old caller-supplied-factor path, safe failure while the approved registry is empty, candidate labeling and registry separation, content-derived immutable candidate snapshot versions, per-input provenance and conditional observation periods, method/version metadata, response-only legacy metadata, unchanged calculation arithmetic, no occupancy effect, no projections, the unapproved `0.145` candidate path, and the corrupted-JSON safe error response. Approved success and category matching against a real registry record remain untested because no owner-approved factor exists. These test results do not approve any factor.
 
 ---
 
@@ -17,7 +43,7 @@
 | Test Suite ID | Functional Area | Test Cases | Objective |
 | :---: | :--- | :---: | :--- |
 | **TS-IMG** | Image Upload & Ingestion | 3 | Validate file format, size limits, and corrupt buffer rejection. |
-| **TS-DET** | Computer Vision Detection | 3 | Verify YOLOv8n inference, category mapping, and confidence filtering. |
+| **TS-DET** | Computer Vision Detection | 3 | Planned verification of the PRD's pretrained YOLO11n proposal, category mapping, and confidence filtering. |
 | **TS-HUM** | Human Verification Loop | 4 | Test box deletion, reclassification, manual drawing, and confirmation. |
 | **TS-DUP** | Photo Duplication & Overlap | 2 | Ensure multiple photos are not naively summed as daily traffic. |
 | **TS-CALC** | Hand-Calculated Carbon Benchmarks | 3 | Numerically verify $\text{VKT} \times EF$ against hand-computed ground truth. |
@@ -73,6 +99,8 @@
 ---
 
 ### 2.5 TS-CALC: Hand-Calculated Carbon Benchmarks
+
+> Benchmark factors are arithmetic fixtures, not scientifically approved production factors. Benchmark Case 1 uses `0.150 kg CO2/veh-km`; the car candidate `0.145` and other values in the source register remain unverified. These tests prove arithmetic only.
 
 The following hand-calculated test cases serve as absolute numerical benchmarks for verifying the deterministic engine:
 
@@ -161,3 +189,22 @@ The following hand-calculated test cases serve as absolute numerical benchmarks 
 | Test ID | Test Title & Preconditions | Scripted Sequence | Expected Result | Status | Actual Result |
 | :---: | :--- | :--- | :--- | :---: | :--- |
 | **T-E2E-01** | **Complete Live 4-Minute Hackathon Demo**<br>*Precondition:* Clean database, server running on laptop. | 1. Create Assessment "DSU North Gate 2026"<br>2. Upload parking snapshot image<br>3. Review detections in Canvas; delete 1 false positive, reclassify 1 auto-rickshaw<br>4. Confirm verification<br>5. Enter commute survey inputs ($n=18$)<br>6. View baseline emissions chart with evidence tags<br>7. Adjust Carpooling and Shuttle sliders<br>8. View guarded AI recommendations with attached deterministic numbers<br>9. Simulate network cutoff; verify rule-based fallback renders within 4s. | Full user journey executes flawlessly in under 4 minutes with zero uncaught exceptions, zero console errors, and clean evaluator presentation. | `Planned` | *Pending live test execution* |
+## Implemented Judges' Demo Regression Tests (2026-10-16)
+
+The demo-specific tests are in `tests/test_demo_api.py`. They exercise multipart ASGI requests with mocked detection and LLM providers, temporary SQLite files, image decoding, COCO fixture mapping, model-name-based custom class mapping, model caching, missing-weight behavior, explicitly simulated detections, estimate/scenario arithmetic, factor/unit/range validation, persistence/retrieval, provider timeout/schema rejection, and safe API errors. These mocked tests do not verify real model inference.
+
+Observed commands from the repository root using the existing virtual environment:
+
+    & '.\.venv\Scripts\python.exe' -B -m unittest tests.test_carbon_engine -v
+    Result: 13 passed, exit 0.
+
+    & '.\.venv\Scripts\python.exe' -B -m unittest tests.test_commute_api -v
+    Result: 32 passed, exit 0.
+
+    & '.\.venv\Scripts\python.exe' -B -m unittest tests.test_demo_api -v
+    Result: 15 passed, exit 0.
+
+    & '.\.venv\Scripts\python.exe' -B -m unittest discover -s tests -v
+    Result: 60 passed, 0 failures, 0 errors, exit 0.
+
+The tests use mocks and do not prove the real model's accuracy or a live external LLM call. Those require locally provisioned model weights and optional provider credentials. The current detector tests confirm class-name-based mapping for custom class ordering and verify that simulated counts do not invoke the detector. Actual inference must be verified on each laptop with that laptop's selected weights and image.

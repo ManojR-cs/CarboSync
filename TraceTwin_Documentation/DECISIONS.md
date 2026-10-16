@@ -2,7 +2,7 @@
 
 **Document Type:** Formal Decision Records  
 **Current Stage:** Requirements & Architecture Planning  
-**Last Updated:** October 15, 2026  
+**Last Updated:** October 16, 2026
 **Auditor:** TraceTwin Architecture Review Board  
 
 ---
@@ -15,15 +15,16 @@
 | **ADR-002** | Four Core Vehicle Categories & Baseline Exclusions | `Confirmed` | Domain Modeling & Methodology |
 | **ADR-003** | Hybrid Data Collection & Strict Isolation of Evidence Streams | `Confirmed` | Data Architecture & Ingestion |
 | **ADR-004** | Road-Route Commute Distance & Locality Minimization | `Confirmed` | GIS & Privacy Engineering |
-| **ADR-005** | Fixed Emission Factors with Provenance Register | `Confirmed` | Carbon Accounting Engine |
+| **ADR-005** | Fixed Emission Factors with Provenance Register | `Needs verification` | Carbon Accounting Engine |
 | **ADR-006** | Sample-Based Baseline vs. Explicit Campus Projections | `Confirmed` | Statistics & UI Presentation |
 | **ADR-007** | Three Core Digital Twin Scenarios with Added Emissions | `Confirmed` | Simulation Engine |
 | **ADR-008** | Guarded Generative AI with Deterministic Fallback | `Confirmed` | AI Safety & Robustness |
 | **ADR-009** | Pretrained Ultralytics YOLO11n with Human-in-the-Loop Review | `Confirmed` | Computer Vision Pipeline |
 | **ADR-010** | Student Register Authorization Scope and Privacy Governance | `Needs verification` | Legal, Privacy & Compliance |
-| **ADR-011** | Zero Pre-Built Code Hackathon Compliance Standard | `Confirmed` | Competition Regulatory Compliance |
+| **ADR-011** | Zero Pre-Built Code Hackathon Compliance Standard | `Historical; external rule needs verification` | Competition Regulatory Compliance |
 | **ADR-012** | Proposed Technology Stack (FastAPI, SQLite, Vanilla JS) | `Proposed` | Implementation Engineering |
 | **ADR-013** | Parallel Workstream Governance & Dedicated Integration Owner | `Confirmed` | Team Organization & Delivery |
+| **ADR-014** | Current B3 API Contract and Factor Governance | `Confirmed for B3 implementation` | Backend Contract & Evidence |
 
 ---
 
@@ -111,8 +112,8 @@
 
 - **Decision ID:** `ADR-005`
 - **Topic:** Selection, Unit Standardization, and Provenance of Carbon Factors.
-- **Decision:** The calculation engine will apply fixed, category-specific tailpipe emission factors expressed in $\text{kg } CO_2/\text{veh-km}$. Every factor will be documented in a transparent factor register with its publication source, geographic context, and approximation notes. Users will have the ability to inspect and override these factors via an audit drawer.
-- **Status:** `Confirmed`
+- **Decision:** Approved calculations resolve exact, immutable factor versions from a server-controlled registry. Candidate calculations require an explicit candidate mode and remain unapproved. The approved registry is empty; no candidate in the source register or test suite is an implementation default. Factor records include category and known fuel/powertrain applicability, source metadata, limitations, review evidence, and owner approval decision when approved.
+- **Status:** `Needs verification` (factor set not selected or verified)
 - **Rationale:**
   - Eliminates ambiguity and ensures deterministic, reproducible mathematical outcomes.
   - Distinguishes tailpipe $CO_2$ from full lifecycle $CO_2e$, preventing misleading claims.
@@ -128,7 +129,7 @@
 
 - **Decision ID:** `ADR-006`
 - **Topic:** Statistical Representation of Small Survey Samples ($n < 20$).
-- **Decision:** The primary headline metric on the dashboard will represent a **Sample-Based Baseline** reflecting the surveyed cohort. A campus-wide projected total will only be displayed if the user explicitly activates an "Extrapolate to Campus" toggle, which requires inputting the total campus population and explicitly accepts documented mode-share assumptions.
+- **Decision:** B3 does not calculate campus-wide projections. The current calculation remains a sample/activity-input calculation with `is_campus_projection: false`; `sample_size` and `population_total` do not cause extrapolation. A projection requires a separately approved methodology and milestone.
 - **Status:** `Confirmed`
 - **Rationale:**
   - Given an expected survey sample under 20 responses, automatic campus-wide extrapolation is statistically indefensible and academically dishonest.
@@ -212,10 +213,12 @@
 
 ## ADR-011: Zero Pre-Built Code Hackathon Compliance Standard
 
+> Historical event-planning record. The repository now contains source and tests. This record does not establish whether the event rule applies to current work or whether the repository complied; the project owner must verify that separately.
+
 - **Decision ID:** `ADR-011`
 - **Topic:** Adherence to Code Clash 2.0 Hackathon Competition Rules.
 - **Decision:** The project repository prior to kickoff will contain exclusively documentation, architectural designs, data dictionaries, mathematical specifications, test protocols, and execution roadmaps. Zero application source code (Python, JS, HTML, CSS, SQL, shell scripts) or starter templates will be generated or committed before the official competition start time.
-- **Status:** `Confirmed`
+- **Status:** `Historical; external rule needs verification`
 - **Rationale:**
   - Preserves complete integrity and avoids disqualification under the event rule: *"All code must be written during the event and pre-built projects/templates are prohibited."*
   - Clear documentation enables the team to write clean, purposeful code rapidly during the event with the assistance of interactive AI tools.
@@ -262,3 +265,31 @@
   - Team members must not alter endpoint paths, request keys, or response payloads without explicit agreement from the Integration Owner.
 - **Open Concerns:** Maintaining discipline so team members don't bypass the API contract when under time pressure.
 - **Date / Stage:** Pre-Hackathon Planning (October 15, 2026).
+
+---
+
+## ADR-014: Current B3 API Contract and Factor Governance
+
+- **Decision ID:** `ADR-014`
+- **Topic:** B3 measurement provenance, factor governance, and auditable calculation snapshots.
+- **Status:** `Confirmed for implemented B3 contract`.
+- **Decision:** `TraceTwin_Documentation/BACKEND.md` Section 6 is the single current API contract. Historical API proposals elsewhere are not live schemas. The existing routes, safe error envelopes, CORS, and B2 JSON persistence remain in place.
+- **Calculation:** Preserve the deterministic direct tailpipe CO2 formula and use backend method identifier `commute_tailpipe_co2_v1`. Occupancy remains required but unused. Sample and population fields do not enable projections.
+- **Activity provenance:** Each new calculation requires separate provenance for annual days, daily vehicles, and one-way distance. Origins are `observed`, `user_provided`, or `estimated`. Structural validation does not verify factual accuracy or representativeness.
+- **Factor governance:** Requests explicitly select `approved` or `candidate`. Approved mode uses only an exact server registry reference. Candidate mode uses `candidate_factor` and cannot modify registry status. The approved registry remains empty until the project owner records approval with review evidence. `0.145` remains unverified; `0.150` remains test-only.
+- **Applicability:** Category compatibility is checked. Fuel and powertrain are not request fields; the backend does not claim to validate those dimensions.
+- **Legacy records:** B2 snapshots are not rewritten. Assessment retrieval adds `b3_metadata.availability: unavailable_legacy_b2` and marks activity provenance, factor governance, and method version unavailable.
+- **Contract owner:** The project owner approves factors and API contract changes. Coordinate later consumer changes with frontend/CV owners.
+- **CV:** PRD and ADR-009 specify pretrained YOLO11n. No CV code/model is integrated. The older YOLOv8n references are stale. Any model-choice change, including custom training, requires an explicit product decision and updated class/output contract.
+- **Contract owner:** Backend/API changes should be reviewed by the project owner/backend owner and coordinated with frontend/CV owners. A distinct Integration Owner has not been confirmed for the current team.
+- **Date / Stage:** B3 implementation, October 16, 2026.
+
+The factor registry is empty because no owner-approved factor and review evidence were supplied. This is an intentional unavailable state, not a missing default.
+## ADR-015: Separate Judges' Demo Estimation Flow
+
+- **Status:** Implemented for an illustrative demo; no production factor approval.
+- **Decision:** Add POST /api/demo/analyze and GET /api/demo/analyses/{analysis_id} separately from the B3 assessment-calculation API. Demo factors and activity assumptions are explicitly supplied, backend-labelled illustrative_unapproved, and cannot modify the approved registry.
+- **Detection:** YOLO11n uses local weights only and maps COCO IDs 1, 2, 3, 5, and 7 to bicycle, car, motorcycle, bus, and truck. There is no automatic weight download. Missing runtime/weights produce a safe unavailable response.
+- **Estimation:** A single image provides only snapshot counts. Daily commute cycles and distance are separate explicit assumptions. All three scenario calculations reuse the deterministic demo estimator and remain illustrative.
+- **Persistence/privacy:** SQLite stores structured counts, assumptions, factors, scenarios, and recommendation status; uploaded and annotated image bytes and secrets are not stored.
+- **Recommendations:** An optional OpenAI-compatible provider receives structured results only. A schema-checked deterministic fallback keeps the core flow available without credentials.

@@ -3,7 +3,13 @@
 **Document Type:** Hackathon Project Management & Workstream Roadmap  
 **Event:** Dayananda Sagar University Code Clash 2.0 (October 15–16, 2026)  
 **Execution Horizon:** 48 Hours  
-**Current Stage:** Pre-Hackathon Planning & Role Allocation  
+**Current Stage:** B3 backend governance implemented; owner review pending
+
+> **Historical roadmap:** The hour-by-hour schedule and four-workstream assignments describe the original hackathon plan; they are not current progress evidence or confirmed current team assignments. Current implementation and test evidence is in `STATUS.md`. `BACKEND.md` Section 6 is the current API contract.
+
+## Current implementation checkpoint — B3
+
+B1 provides the health and deterministic commute calculation routes. B2 adds SQLite-backed assessment creation and retrieval. B3 adds per-input activity provenance, explicit candidate/approved calculation modes, an empty owner-controlled approved-factor registry, method versioning, immutable factor/result snapshots, and response-only metadata for legacy B2 calculations. Approved calculations remain unavailable until an owner-approved factor with review evidence is entered. This checkpoint does not implement YOLO, human review, projections, scenarios, recommendations, environmental data, or frontend integration. See `STATUS.md` for observed test evidence.
 
 ---
 
@@ -166,3 +172,4 @@ A feature or workstream is declared **Done** during the hackathon only when:
 3. **Unit / Verification Test Passed:** Passes its corresponding test case in [TEST_PLAN.md](file:///c:/Users/yasha/OneDrive/Documents/Trace_Twin/TraceTwin_Documentation/TEST_PLAN.md) with documented evidence.
 4. **Evidence Label Attached:** Any newly introduced metric renders its correct evidence provenance tag on the UI.
 5. **Approved by Integration Owner:** Reviewed and merged without breaking existing vertical slice flows.
+> Current implementation checkpoint (2026-10-16): B1–B3 and the illustrative judges' demo backend are implemented. Frontend, human review, environmental integrations, and approved real-world factors remain outside this backend milestone. See BACKEND.md Section 7 and STATUS.md for verified behavior.

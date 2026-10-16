@@ -2,14 +2,14 @@
 
 **Document Type:** Formal Source Register & Assumptions Benchmark  
 **Target Audience:** Environmental Data Analysts, Campus Auditors, Technical Reviewers  
-**Last Updated:** October 15, 2026  
+**Last Updated:** October 16, 2026
 **Methodological Standard:** Strict separation of tailpipe $CO_2$ from lifecycle/grid factors; documented geographic and fleet limitations.
 
 ---
 
-## 1. Verified Emission Factor Register
+## 1. Candidate Emission Factor Register (Unverified)
 
-The table below compiles candidate and proposed emission factors for the TraceTwin calculation engine. 
+The table below compiles candidate values for review. Despite the historical “Verified” wording in this document's earlier title, each listed factor is marked `Needs verification`; none is approved as a production factor by the current backend implementation.
 
 > [!IMPORTANT]
 > **Provenance & Unit Disclosure:**
@@ -65,6 +65,8 @@ In environmental modeling, when empirical measurements are unavailable, defensib
 
 ## 4. Methodological Sensitivity Analysis
 
+> The calculations below are illustrative sensitivity examples using unverified candidate values. They do not verify either factor or establish a production baseline.
+
 To understand how variations in assumptions affect final carbon totals:
 
 1. **Operating Days ($Y$):** A 10% change in academic operating days ($\pm 20$ days) produces an exact linear $\pm 10\%$ shift in total annual emissions.
@@ -72,3 +74,18 @@ To understand how variations in assumptions affect final carbon totals:
 3. **Shuttle Breakeven Occupancy:** For an institutional diesel shuttle ($EF = 0.850 \text{ kg } CO_2/\text{km}$) running a 15 km route, replacing solo cars ($EF = 0.145 \text{ kg } CO_2/\text{km}$), the shuttle must displace at least:
    $$\frac{0.850}{0.145} \approx 5.86 \approx \mathbf{6 \text{ personal cars}}$$
    If a shuttle route diverts fewer than 6 cars (or fewer than ~7 solo car drivers), **the shuttle generates net positive carbon emissions**, polluting more than the private cars it replaces.
+
+---
+
+## 5. B3 Registry and Current Approval State
+
+The server-controlled approved factor registry is implemented in `backend/factor_registry.py` and currently contains no approved records. A factor may enter that registry only after the project owner records an explicit approval decision and supporting review evidence. The application does not independently authenticate a cited publication.
+
+The API's candidate path is separate from the approved registry. Candidate snapshots are marked unapproved and preserve the submitted value, version identifier, source description where available, and limitations. Caller-supplied provenance cannot grant approval. `0.145 kg CO2/veh-km` remains an unverified candidate. `0.150 kg CO2/veh-km` remains a test fixture only.
+
+Factor metadata records category applicability and known fuel/powertrain applicability. The current activity request contains no fuel or powertrain field; consequently, the backend checks category but does not claim fuel/powertrain compatibility was checked. Fuel-specific candidates must not be interpreted as universal factors.
+## Judges' Demo Factors and Assumptions
+
+The demo endpoint requires four explicit caller-supplied motor-category factors and explicit activity/scenario assumptions. They are stored as demo request snapshots and labelled illustrative_unapproved by the backend. Caller text such as source descriptions is preserved as an explanation only; it is not checked for truth, source authenticity, publication quality, or owner approval. Demo factors cannot enter the approved registry through this endpoint. No factor value is supplied as a hidden default. Example values in BACKEND.md are request examples only, not recommended or scientifically validated factors.
+
+Image counts are visible-object detections from one point in time. Applying an assumed number of commute cycles per detected vehicle is an additional user-provided modeling assumption, not a measurement made by YOLO. Scenario shares, shuttle service, and active-travel distance limits are explicit illustrative settings, not evidence of feasible policy uptake.
