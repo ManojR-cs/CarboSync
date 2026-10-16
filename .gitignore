@@ -36,6 +36,8 @@ generated/
 tmp_uploads/
 analysis_outputs/
 /evaluation_data/
+/dataset/
+/github-backend-snapshot/
 /test_images/
 /detection_results/
 

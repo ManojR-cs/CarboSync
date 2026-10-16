@@ -8,6 +8,10 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from backend.vehicle_detection import (
     DetectionFailed,
     DetectionUnavailable,
@@ -36,7 +40,7 @@ REPORT_NAMES = {
 def main() -> int:
     if len(sys.argv) != 2:
         print("Usage:")
-        print("python vehicle_detection.py test_images/Test1.jpg")
+        print("python tools/detect_image.py path/to/parking-image.jpg")
         return 1
 
     image_path = Path(sys.argv[1]).expanduser().resolve()
