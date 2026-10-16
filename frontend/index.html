@@ -3,13 +3,15 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TraceTwin — Campus Commute Emissions Intelligence</title>
-  <meta name="description" content="See the traffic. Trace the carbon. Test the fix. TraceTwin is a campus commute emissions estimation platform combining computer vision and digital twin simulation." />
+  <title>CarbonSync — Campus Commute Intelligence</title>
+  <meta name="description" content="CarbonSync brings campus parking observations and commute estimates together with transparent assumptions." />
+  <meta name="carbonsync-api-base" content="" />
 
   <!-- CSS -->
   <link rel="stylesheet" href="css/main.css" />
   <link rel="stylesheet" href="css/components.css" />
   <link rel="stylesheet" href="css/canvas.css" />
+  <link rel="stylesheet" href="css/carbonsync.css" />
 
   <!-- Chart.js CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -23,8 +25,8 @@
     <div class="header-brand">
       <div class="brand-icon" aria-hidden="true">🌿</div>
       <div>
-        <div class="brand-title">TraceTwin</div>
-        <div class="brand-tagline">See the traffic. Trace the carbon. Test the fix.</div>
+        <div class="brand-title">CarbonSync</div>
+        <div class="brand-tagline">Campus mobility · measured with context</div>
       </div>
     </div>
 
@@ -60,29 +62,29 @@
         <span class="chip"><span>📍</span> <span id="active-assessment-area">—</span></span>
         <span class="chip"><span>📅</span> <span id="active-assessment-days">—</span></span>
       </div>
-      <span class="badge badge-human">[Human-confirmed observation]</span>
+      <span class="badge badge-human">Local demo workspace</span>
     </div>
   </div>
 
   <!-- ═══════════════ TAB NAVIGATION ═══════════════ -->
   <nav class="tab-nav" role="navigation" aria-label="Main navigation">
     <button class="tab-btn active" data-tab="1" id="tab-btn-1" aria-controls="tab-panel-1">
-      <span class="tab-num">1</span> Assessment
+      <span class="tab-num">1</span> Overview
     </button>
     <button class="tab-btn" data-tab="2" id="tab-btn-2" aria-controls="tab-panel-2">
-      <span class="tab-num">2</span> Parking CV Audit
+      <span class="tab-num">2</span> Parking Analysis
     </button>
     <button class="tab-btn" data-tab="3" id="tab-btn-3" aria-controls="tab-panel-3">
-      <span class="tab-num">3</span> Commute Data
+      <span class="tab-num">3</span> Students
     </button>
     <button class="tab-btn" data-tab="4" id="tab-btn-4" aria-controls="tab-panel-4">
       <span class="tab-num">4</span> Baseline Emissions
     </button>
     <button class="tab-btn" data-tab="5" id="tab-btn-5" aria-controls="tab-panel-5">
-      <span class="tab-num">5</span> Digital Twin Scenarios
+      <span class="tab-num">4</span> Insights &amp; Simulation
     </button>
     <button class="tab-btn" data-tab="6" id="tab-btn-6" aria-controls="tab-panel-6">
-      <span class="tab-num">6</span> AI Policy Cards
+      <span class="tab-num">5</span> Final Report
     </button>
   </nav>
 
@@ -91,6 +93,7 @@
 
     <!-- ─────────────── TAB 1: ASSESSMENT SETUP ─────────────── -->
     <section class="tab-panel active" id="tab-panel-1" role="tabpanel" aria-labelledby="tab-btn-1">
+      <div id="overview-page"></div>
       <div class="section-header">
         <h1>New Emissions Assessment</h1>
         <p>Initialise a new campus commute audit session. All data is stored locally.</p>
@@ -159,7 +162,7 @@
         <div class="card">
           <h3 style="margin-bottom:var(--sp-sm);">🔬 How It Works</h3>
           <ol style="display:flex; flex-direction:column; gap:6px; padding-left:var(--sp-md); list-style:decimal; color:var(--text-secondary); font-size:0.875rem;">
-            <li>Upload a parking photo → YOLO11n detects vehicles</li>
+            <li>Upload a parking photo → the configured local YOLO model proposes vehicles</li>
             <li>You review &amp; correct detections</li>
             <li>Enter commute survey data</li>
             <li>View calculated CO₂ baseline &amp; run scenarios</li>
@@ -170,29 +173,49 @@
 
     <!-- ─────────────── TAB 2: PARKING CV AUDIT ─────────────── -->
     <section class="tab-panel" id="tab-panel-2" role="tabpanel" aria-labelledby="tab-btn-2">
+      <div id="parking-campaign-controls" class="card campaign-controls">
+        <div>
+          <strong id="campaign-progress">No observation period started</strong>
+          <div id="campaign-progress-detail" class="text-sm text-muted">Start a 10-day campaign to save daily observations.</div>
+        </div>
+        <div class="campaign-actions">
+          <label class="form-label" for="observation-date">Observation date</label>
+          <input class="form-input" id="observation-date" type="date" />
+          <button class="btn btn-outline" id="start-campaign-btn">Start 10-day period</button>
+        </div>
+      </div>
       <div class="section-header">
         <h2>Parking Image Upload &amp; Interactive CV Review</h2>
-        <p>Upload a parking snapshot. YOLO11n detects vehicles. Review, correct, and confirm.</p>
+        <p>Upload a parking snapshot. The configured local YOLO model proposes detections for you to review, correct, and confirm.</p>
       </div>
 
       <!-- Drop Zone -->
       <div id="drop-section">
         <div class="drop-zone" id="drop-zone" role="button" aria-label="Upload parking image">
-          <input type="file" id="image-file-input" accept="image/jpeg,image/png" aria-label="Choose parking photo" />
+          <input type="file" id="image-file-input" accept="image/jpeg,image/png,image/webp" aria-label="Choose parking photo" />
           <div class="drop-zone-icon">📷</div>
           <div class="drop-zone-label">Drag &amp; drop a parking photo here</div>
-          <div class="drop-zone-hint">or click to browse — JPEG / PNG, max 20 MB</div>
+          <div class="drop-zone-hint">or click to browse — JPEG, PNG, or WebP, max 10 MiB</div>
           <div class="mt-md">
-            <span class="badge badge-info">YOLO11n inference runs on CPU (~2–3 sec)</span>
+            <span class="badge badge-info">Local YOLO inference runs on CPU; speed depends on model and image size</span>
           </div>
         </div>
+        <div class="selected-image-row"><span id="selected-image-name" class="text-sm text-muted">Choose a parking image to begin.</span><button class="btn btn-primary btn-lg" id="analyse-image-btn" disabled>Analyse Image</button></div>
       </div>
 
       <!-- Canvas Section (hidden until image loaded) -->
       <div id="canvas-section" style="display:none;">
 
+        <div id="mock-detection-warning" class="card" role="status" style="display:none; margin-bottom:var(--sp-md); border-color:#f59e0b; color:var(--text-primary);">
+          <strong>Image not analyzed.</strong> Mock mode cannot detect vehicles. Connect the live backend to get real model detections; no sample boxes are shown over your photo.
+        </div>
+        <div id="zero-detection-review" class="card alert alert-warning" role="status" style="display:none; margin-bottom:var(--sp-md);">
+          <strong>No supported vehicles were detected by the model.</strong> This is not proof that the image contains no vehicles. Inspect the full image, draw any missing boxes, and confirm the final counts before saving.
+        </div>
+
         <!-- Toolbar -->
         <div class="canvas-toolbar mb-md flex-wrap" style="gap:var(--sp-xs);">
+          <button class="canvas-tool-btn" id="change-image-btn">＋ Another snapshot</button>
           <button class="canvas-tool-btn active" id="tool-select-btn" title="Select / click detections">
             ↖ Select
           </button>
@@ -208,11 +231,7 @@
             <button class="image-toggle-btn" id="view-annotated-btn">CV Annotated</button>
           </div>
           <div class="toolbar-divider"></div>
-          <label style="display:flex; align-items:center; gap:6px; font-size:0.75rem; color:var(--text-muted);">
-            Sensitivity:
-            <input type="range" id="cv-conf-slider" min="10" max="50" value="15" step="5" style="width:70px; cursor:pointer;" title="Adjust detection confidence threshold" />
-            <span id="cv-conf-val" style="font-weight:700; color:var(--text-primary); min-width:24px;">15%</span>
-          </label>
+          <span style="font-size:0.75rem; color:var(--text-muted);">Model threshold: <strong id="cv-conf-val" style="color:var(--text-primary);">server setting</strong></span>
           <div class="toolbar-divider"></div>
           <span class="text-xs text-muted" style="align-self:center;">Click box to select · Del key to remove</span>
         </div>
@@ -247,7 +266,7 @@
           <!-- Loading overlay -->
           <div class="canvas-loading" id="canvas-loading" style="display:none;">
             <div class="spinner"></div>
-            <div class="canvas-loading-text">Running YOLO11n inference…</div>
+            <div class="canvas-loading-text">Running local YOLO inference…</div>
           </div>
         </div>
 
@@ -326,11 +345,20 @@
             </button>
           </div>
         </div>
+        <div class="observation-save-row card mt-md">
+          <div>
+            <strong>Save reviewed snapshot</strong>
+            <p class="text-sm text-muted">Counts are saved for the selected date. Same image cannot be added twice to one campaign.</p>
+            <label class="review-confirmation"><input type="checkbox" id="human-review-confirmed" /> I reviewed this image and confirm the vehicle counts. For zero detections, I checked the full image and confirmed that zero is intentional.</label>
+          </div>
+          <button class="btn btn-primary" id="save-observation-btn" disabled>Save Observation</button>
+        </div>
       </div>
     </section>
 
     <!-- ─────────────── TAB 3: COMMUTE DATA ─────────────── -->
     <section class="tab-panel" id="tab-panel-3" role="tabpanel" aria-labelledby="tab-btn-3">
+      <div id="students-page"></div>
       <div class="section-header">
         <h2>Commute Activity &amp; Survey Data Entry</h2>
         <p>Enter daily vehicle counts, average distances, and occupancy from your commute survey.</p>
@@ -527,7 +555,7 @@
         <div class="flex items-center justify-between flex-wrap gap-md">
           <div>
             <h3>Ready to test decarbonisation scenarios?</h3>
-            <p class="text-sm mt-sm">Use the Digital Twin to simulate remote schedules, carpooling incentives, and shuttle routes.</p>
+            <p class="text-sm mt-sm">Compare active travel, carpooling, and shuttle scenarios using the backend's deterministic estimates.</p>
           </div>
           <button class="btn btn-primary btn-lg" onclick="switchTab(5)">
             Go to Digital Twin Scenarios →
@@ -538,6 +566,7 @@
 
     <!-- ─────────────── TAB 5: DIGITAL TWIN SCENARIOS ─────────────── -->
     <section class="tab-panel" id="tab-panel-5" role="tabpanel" aria-labelledby="tab-btn-5">
+      <div id="insights-page"></div>
       <div class="section-header">
         <div class="flex items-center justify-between flex-wrap gap-md">
           <div>
@@ -555,18 +584,22 @@
         <div class="card">
           <div class="flex items-center gap-sm mb-md">
             <span class="badge badge-accent">S1</span>
-            <h3>Remote / Hybrid Schedule</h3>
+            <h3>Active Travel Shift</h3>
           </div>
-          <p class="text-sm text-muted mb-lg">Reduce on-campus academic days by shifting to asynchronous learning.</p>
+            <p class="text-sm text-muted mb-lg">Shift a share of car and motorcycle activity within the distance limit below to walking or cycling.</p>
           <div class="slider-wrapper">
             <div class="slider-header">
-              <span class="slider-label">Remote Day Reduction</span>
+              <span class="slider-label">Eligible short trips shifted</span>
               <span class="slider-value" id="s1-remote-val">20%</span>
             </div>
             <input type="range" id="s1-remote-slider" min="0" max="50" value="20" step="5" />
             <div class="flex justify-between text-xs text-muted">
               <span>0% (no change)</span><span>50% max</span>
             </div>
+          </div>
+          <div class="form-group mt-md">
+            <label class="form-label" for="active-travel-limit">Maximum eligible one-way trip distance (km)</label>
+            <input class="form-input" id="active-travel-limit" type="number" value="5" min="0.1" max="300" step="0.5" />
           </div>
         </div>
 
@@ -655,7 +688,7 @@
           <div class="kpi-unit">t CO₂/yr</div>
         </div>
         <div class="kpi-card" style="--kpi-accent:#818cf8;">
-          <div class="kpi-label">Scenario 1 — Remote</div>
+          <div class="kpi-label">Scenario 1 — Active Travel</div>
           <div class="kpi-value text-sm text-success" id="scenario-s1-val">—</div>
           <div class="kpi-unit">t CO₂/yr</div>
         </div>
@@ -673,7 +706,7 @@
 
       <!-- Net Savings -->
       <div class="card mb-xl" style="text-align:center;">
-        <div class="text-xs text-muted mb-sm">Best-Case Net CO₂ Saving (Combined Scenarios)</div>
+        <div class="text-xs text-muted mb-sm">Best-Case Saving (Best Single Scenario)</div>
         <div class="font-mono font-bold" style="font-size:2.5rem;" id="net-savings-val">—</div>
         <div class="text-xs text-muted">per academic year</div>
         <div class="mt-sm"><span class="badge badge-derived">[Derived calculation]</span></div>
@@ -690,6 +723,7 @@
 
     <!-- ─────────────── TAB 6: AI POLICY CARDS ─────────────── -->
     <section class="tab-panel" id="tab-panel-6" role="tabpanel" aria-labelledby="tab-btn-6">
+      <div id="report-page"></div>
       <div class="section-header">
         <h2>Guarded AI Policy Recommendations</h2>
         <p>Qualitative policy cards with deterministically-attached savings figures. Numbers are calculated — not generated by AI.</p>

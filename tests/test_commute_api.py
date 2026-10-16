@@ -727,9 +727,27 @@ class CommuteApiTests(unittest.TestCase):
         self.assertEqual(json.loads(stored), legacy_result)
 
     def test_health_endpoint(self) -> None:
-        status, response, _ = asyncio.run(asgi_request("GET", "/health"))
+        with patch(
+            "backend.main.get_detector_metadata",
+            return_value={"name": "yolo11x", "weights_sha256": "a" * 64},
+        ):
+            status, response, _ = asyncio.run(asgi_request("GET", "/health"))
         self.assertEqual(status, 200)
-        self.assertEqual(response, {"status": "healthy"})
+        self.assertEqual(response["status"], "healthy")
+        self.assertEqual(response["detector"]["status"], "ready")
+        self.assertEqual(response["detector"]["name"], "yolo11x")
+
+    def test_health_reports_detector_unavailable_without_failing_api(self) -> None:
+        from backend.vehicle_detection import DetectionUnavailable
+
+        with patch(
+            "backend.main.get_detector_metadata",
+            side_effect=DetectionUnavailable("Configured YOLO weights are unavailable."),
+        ):
+            status, response, _ = asyncio.run(asgi_request("GET", "/health"))
+        self.assertEqual(status, 200)
+        self.assertEqual(response["status"], "healthy")
+        self.assertEqual(response["detector"]["status"], "unavailable")
 
     def test_docs_route_remains_available(self) -> None:
         status, _, _ = asyncio.run(asgi_request("GET", "/docs"))
@@ -810,6 +828,7 @@ class CommuteApiTests(unittest.TestCase):
                 headers=[
                     (b"origin", b"http://localhost:5500"),
                     (b"access-control-request-method", b"GET"),
+                    (b"access-control-request-private-network", b"true"),
                 ],
             )
         )
@@ -817,6 +836,9 @@ class CommuteApiTests(unittest.TestCase):
         self.assertEqual(
             response_headers[b"access-control-allow-origin"],
             b"http://localhost:5500",
+        )
+        self.assertEqual(
+            response_headers[b"access-control-allow-private-network"], b"true"
         )
         self.assertNotIn(b"access-control-allow-credentials", response_headers)
 

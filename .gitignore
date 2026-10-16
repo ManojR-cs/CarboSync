@@ -35,6 +35,9 @@ uploads/
 generated/
 tmp_uploads/
 analysis_outputs/
+/evaluation_data/
+/test_images/
+/detection_results/
 
 # OS Artifacts
 .DS_Store

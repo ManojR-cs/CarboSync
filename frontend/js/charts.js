@@ -41,7 +41,7 @@ const Charts = (() => {
 
     const breakdown = data.category_breakdown || [];
     const labels    = breakdown.map(d => d.category);
-    const values    = breakdown.map(d => d.annual_tonnes_co2);
+    const values    = breakdown.map(d => d.annual_tonnes_co2 ?? d.annual_emissions_tonnes_co2_per_year ?? 0);
     const colors    = breakdown.map(d => categoryColor(d.category));
 
     doughnutChart = new Chart(ctx, {
@@ -126,7 +126,7 @@ const Charts = (() => {
 
   function buildBarData(baseline, sd) {
     return {
-      labels: ['Baseline', 'Scenario 1\nRemote Days', 'Scenario 2\nCarpool', 'Scenario 3\nShuttle'],
+      labels: ['Baseline', 'Scenario 1\nActive Travel', 'Scenario 2\nCarpool', 'Scenario 3\nShuttle'],
       datasets: [
         {
           label: 'Emissions (t CO₂/yr)',

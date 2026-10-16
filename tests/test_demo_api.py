@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from copy import deepcopy
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -20,6 +21,7 @@ from backend.demo_calculations import calculate_demo_analysis
 from backend.main import app
 from backend.recommendations import generate_recommendations
 from backend.vehicle_detection import (
+    DetectionFailed,
     DetectionResult,
     ImageInputError,
     count_coco_vehicle_classes,
@@ -39,6 +41,28 @@ FIXTURE_COUNTS = {
     "bus": 1,
     "truck": 1,
 }
+
+
+def fixture_detections(counts=FIXTURE_COUNTS):
+    class_ids = {
+        "car": 2,
+        "motorcycle": 3,
+        "bus": 5,
+        "truck": 7,
+        "bicycle": 1,
+    }
+    return [
+        {
+            "class_id": class_ids[category],
+            "category": category,
+            "confidence": 0.9,
+            "bounding_box_normalized": {
+                "x_min": 0.1, "y_min": 0.2, "x_max": 0.3, "y_max": 0.4,
+            },
+        }
+        for category in ("car", "motorcycle", "bus", "truck", "bicycle")
+        for _ in range(counts[category])
+    ]
 
 
 def demo_request() -> dict:
@@ -178,20 +202,20 @@ class DemoApiTests(unittest.TestCase):
             "data:image/jpeg;base64,dGVzdA==",
             "YOLO11n",
             0.35,
-            detections=[
-                {
-                    "class_id": 2,
-                    "category": "car",
-                    "confidence": 0.91,
-                    "bounding_box_normalized": {
-                        "x_min": 0.1,
-                        "y_min": 0.2,
-                        "x_max": 0.3,
-                        "y_max": 0.4,
-                    },
-                }
-            ],
+            detections=fixture_detections(),
             class_mapping={"bicycle": [1], "car": [2], "motorcycle": [3], "bus": [5], "truck": [7]},
+            metadata={
+                "weights_sha256": "b" * 64,
+                "runtime_versions": {"python": "test", "ultralytics": "test", "torch": "test"},
+                "supported_classes": {"2": "car", "3": "motorcycle"},
+                "inference_settings": {
+                    "confidence_threshold": 0.35,
+                    "iou_threshold": 0.3,
+                    "image_size": 1280,
+                    "nms_mode": "class_aware",
+                    "device": "cpu",
+                },
+            },
         )
         with patch("backend.main.detect_vehicle_image", return_value=detection):
             status, response, _ = self.request()
@@ -199,7 +223,9 @@ class DemoApiTests(unittest.TestCase):
         self.assertEqual(response["detections"]["motor_vehicle_total"], 14)
         self.assertEqual(response["detections"]["bicycle_total"], 3)
         self.assertEqual(response["model"]["confidence_threshold"], 0.35)
+        self.assertEqual(response["model"]["weights_sha256"], "b" * 64)
         self.assertEqual(response["detection_mode"], "real")
+        self.assertEqual(response["inference_status"], "completed_with_detections")
         self.assertEqual(response["detection_details"][0]["category"], "car")
         self.assertEqual(response["detections"]["details"], response["detection_details"])
         result = response["result"]
@@ -222,6 +248,11 @@ class DemoApiTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(saved["detections"]["per_class"], FIXTURE_COUNTS)
         self.assertEqual(saved["detections"]["details"], response["detection_details"])
+        self.assertEqual(saved["detections"]["model_metadata"]["weights_sha256"], "b" * 64)
+        self.assertEqual(
+            saved["detections"]["model_metadata"]["inference_settings"],
+            response["model"]["inference_settings"],
+        )
         self.assertEqual(
             saved["detections"]["class_mapping"],
             {"bicycle": [1], "car": [2], "motorcycle": [3], "bus": [5], "truck": [7]},
@@ -241,11 +272,12 @@ class DemoApiTests(unittest.TestCase):
             detect.assert_not_called()
         with patch(
             "backend.main.detect_vehicle_image",
-            side_effect=RuntimeError("private model diagnostics"),
+            side_effect=DetectionFailed("Vehicle inference failed; no detection result was produced."),
         ):
             status, body, _ = self.request()
         self.assertEqual(status, 500)
-        self.assertEqual(body, {"error": True, "message": "An unexpected error occurred."})
+        self.assertEqual(body["inference_status"], "failed")
+        self.assertTrue(body["error"])
         self.assertNotIn("private model diagnostics", json.dumps(body))
 
     def test_upload_over_size_limit_and_missing_weights_are_safe(self):
@@ -259,16 +291,9 @@ class DemoApiTests(unittest.TestCase):
         ):
             status, body, _ = self.request()
         self.assertEqual(status, 503)
-        self.assertEqual(
-            body,
-            {
-                "error": True,
-                "message": (
-                    "Vehicle detection requires the optional YOLO dependencies and "
-                    "a compatible local weights file."
-                ),
-            },
-        )
+        self.assertTrue(body["error"])
+        self.assertEqual(body["inference_status"], "unavailable")
+        self.assertIn("Configured YOLO weights are unavailable", body["message"])
         self.assertNotIn(self.temp_directory.name, json.dumps(body))
         self.assertFalse(missing_path.exists(), "the service must not download weights")
 
@@ -311,6 +336,7 @@ class DemoApiTests(unittest.TestCase):
         detect.assert_not_called()
         self.assertTrue(response["detections"]["simulated"])
         self.assertEqual(response["detections"]["mode"], "simulated")
+        self.assertEqual(response["inference_status"], "simulated")
         self.assertEqual(
             response["detections"]["observation_scope"], "user_supplied_simulation"
         )
@@ -357,6 +383,26 @@ class DemoCalculationTests(unittest.TestCase):
         request = demo_request()
         request["scenario_assumptions"]["active_travel_shift_share"] = 1.1
         with self.assertRaises(ValueError):
+            calculate_demo_analysis(detection_counts=FIXTURE_COUNTS, request=request)
+
+    def test_positive_activity_rejects_zero_commute_distance(self):
+        request = demo_request()
+        request["vehicle_assumptions"]["car"]["avg_one_way_km"] = 0
+        with self.assertRaisesRegex(ValueError, "car avg_one_way_km must be greater than 0"):
+            calculate_demo_analysis(detection_counts=FIXTURE_COUNTS, request=request)
+
+    def test_zero_activity_placeholder_allows_zero_distance(self):
+        request = demo_request()
+        for assumption in request["vehicle_assumptions"].values():
+            assumption["trips_per_vehicle_per_operating_day"] = 0
+            assumption["avg_one_way_km"] = 0
+        result = calculate_demo_analysis(detection_counts=FIXTURE_COUNTS, request=request)
+        self.assertEqual(result["baseline"]["annual_kg_co2"], 0)
+
+    def test_active_shuttle_service_rejects_zero_route_distance(self):
+        request = demo_request()
+        request["scenario_assumptions"]["shuttle_service"]["avg_one_way_km"] = 0
+        with self.assertRaisesRegex(ValueError, "shuttle avg_one_way_km must be greater than 0"):
             calculate_demo_analysis(detection_counts=FIXTURE_COUNTS, request=request)
 
     def test_scenario_changes_do_not_exceed_feasible_activity(self):
@@ -485,6 +531,8 @@ class ImageValidationTests(unittest.TestCase):
             weight_path.write_bytes(b"test-only fake model marker")
             prior_model = detector_module._loaded_model
             prior_model_path = detector_module._loaded_model_path
+            prior_model_hash = detector_module._loaded_model_sha256
+            prior_model_metadata = detector_module._loaded_model_metadata
             fake_model = MagicMock()
             boxes = SimpleNamespace(
                 cls=SimpleNamespace(tolist=lambda: [2, 0, 2, 3, 5, 4]),
@@ -516,12 +564,16 @@ class ImageValidationTests(unittest.TestCase):
                 },
                 plot=ArrayLike,
             )
+            fake_model.names = fake_result.names
+            fake_model.task = "detect"
             fake_model.predict.return_value = [fake_result]
             fake_yolo = MagicMock(return_value=fake_model)
             fake_annotated = MagicMock()
             fake_annotated.save.side_effect = lambda buffer, **_: buffer.write(b"mock-jpeg")
             detector_module._loaded_model = None
             detector_module._loaded_model_path = None
+            detector_module._loaded_model_sha256 = None
+            detector_module._loaded_model_metadata = None
             try:
                 with (
                     patch.dict(
@@ -542,6 +594,8 @@ class ImageValidationTests(unittest.TestCase):
             finally:
                 detector_module._loaded_model = prior_model
                 detector_module._loaded_model_path = prior_model_path
+                detector_module._loaded_model_sha256 = prior_model_hash
+                detector_module._loaded_model_metadata = prior_model_metadata
 
         self.assertEqual(
             first.counts,
@@ -556,11 +610,59 @@ class ImageValidationTests(unittest.TestCase):
         )
         self.assertEqual(first.unmapped_vehicle_categories, [])
         self.assertEqual(first.confidence_threshold, 0.42)
+        self.assertEqual(
+            first.metadata["weights_sha256"],
+            hashlib.sha256(b"test-only fake model marker").hexdigest(),
+        )
+        self.assertEqual(first.metadata["inference_settings"]["nms_mode"], "class_aware")
+        self.assertEqual(first.inference_status, "completed_with_detections")
+        self.assertEqual(
+            {category: sum(item["category"] == category for item in first.detections)
+             for category in first.counts},
+            first.counts,
+        )
         self.assertTrue(first.annotated_image_data_uri.startswith("data:image/jpeg;base64,"))
         self.assertEqual(second.counts, first.counts)
         fake_yolo.assert_called_once_with(str(weight_path.resolve()))
         self.assertEqual(fake_model.predict.call_count, 2)
         self.assertEqual(fake_model.predict.call_args.kwargs["device"], "cpu")
+        self.assertFalse(fake_model.predict.call_args.kwargs["agnostic_nms"])
+        self.assertEqual(fake_model.predict.call_args.kwargs["iou"], 0.30)
+        self.assertEqual(fake_model.predict.call_args.kwargs["imgsz"], 1280)
+
+    def test_successful_empty_inference_is_distinct_from_failure(self):
+        import backend.vehicle_detection as detector_module
+
+        fake_model = MagicMock()
+        class PlotArray:
+            def __getitem__(self, _key):
+                return self
+
+        fake_result = SimpleNamespace(
+            boxes=None,
+            names={1: "bicycle", 2: "car", 3: "motorcycle", 5: "bus", 7: "truck"},
+            plot=lambda: PlotArray(),
+        )
+
+        fake_model.predict.return_value = [fake_result]
+        fake_annotated = MagicMock()
+        fake_annotated.save.side_effect = lambda buffer, **_: buffer.write(b"mock-jpeg")
+        config = detector_module.DetectorConfig(
+            Path("local-only/model.pt"), 0.15, 0.30, 1280, "class_aware"
+        )
+        with (
+            patch("backend.vehicle_detection._load_model", return_value=fake_model),
+            patch("backend.vehicle_detection.get_detector_config", return_value=config),
+            patch("backend.vehicle_detection._loaded_model_metadata", {"weights_sha256": "a" * 64}),
+            patch("PIL.Image.fromarray", return_value=fake_annotated),
+        ):
+            empty = detect_vehicle_image(object())
+            self.assertEqual(empty.inference_status, "completed_no_detections")
+            self.assertFalse(empty.detections)
+            self.assertEqual(sum(empty.counts.values()), 0)
+            fake_model.predict.side_effect = RuntimeError("private inference diagnostic")
+            with self.assertRaises(DetectionFailed):
+                detect_vehicle_image(object())
 
 
 if __name__ == "__main__":

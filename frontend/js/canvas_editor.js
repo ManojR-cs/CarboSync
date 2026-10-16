@@ -150,6 +150,7 @@ const CanvasEditor = (() => {
     svgOverlay.innerHTML = '';
     const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
     svgOverlay.appendChild(defs);
+    const placedLabels = [];
 
     detections.forEach(det => {
       const { x_min, y_min, x_max, y_max } = det.box;
@@ -195,10 +196,33 @@ const CanvasEditor = (() => {
       const shortName = labelMap[det.category] || det.category.split(' ')[0];
       const confPercent = Math.round(det.confidence * 100);
       const labelText = `${shortName} ${confPercent}%`;
-      const labelW = Math.max(labelText.length * 7.2 + 14, 72);
+      const labelW = Math.min(Math.max(labelText.length * 6.2 + 12, 54), Math.max(54, canvas.width));
       const labelH = 18;
-      const lx = sx;
-      const ly = (sy - labelH - 2 >= 0) ? (sy - labelH - 2) : (sy + 2);
+      // Parking boxes often share the same top edge. Try nearby positions and
+      // keep label chips inside the image so text remains readable and distinct.
+      const maxX = Math.max(0, canvas.width - labelW);
+      const xCandidates = [...new Set([
+        sx, sx + sw - labelW, sx + (sw - labelW) / 2,
+        sx - labelW * 0.55, sx + sw - labelW * 0.45
+      ].map(x => Math.max(0, Math.min(maxX, x))))];
+      const yCandidates = [...new Set([
+        sy - labelH - 2, sy + 2, sy + sh - labelH - 2, sy + sh + 2,
+        sy - labelH - 22, sy + labelH + 4
+      ].map(y => Math.max(0, Math.min(canvas.height - labelH, y))))];
+      let labelPosition = null;
+      for (const y of yCandidates) {
+        for (const x of xCandidates) {
+          const overlaps = placedLabels.some(p => x < p.x + p.w + 2 && x + labelW + 2 > p.x && y < p.y + labelH + 2 && y + labelH + 2 > p.y);
+          if (!overlaps) { labelPosition = { x, y }; break; }
+        }
+        if (labelPosition) break;
+      }
+      // Dense scenes may have no free chip position; use a compact in-box tag.
+      const { x: lx, y: ly } = labelPosition || {
+        x: Math.max(0, Math.min(maxX, sx)),
+        y: Math.max(0, Math.min(canvas.height - labelH, sy + 2))
+      };
+      placedLabels.push({ x: lx, y: ly, w: labelW });
 
       const labelBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
       labelBg.setAttribute('x', lx);
@@ -603,6 +627,7 @@ const CanvasEditor = (() => {
   // ── Get Verified Counts ────────────────────────────────────
   function getVerifiedCounts() {
     const counts = {
+      'Bicycles': 0,
       'Cars': 0, 'Motorcycles and scooters': 0,
       'Buses and campus shuttles': 0, 'Other fuel-burning vehicles': 0
     };

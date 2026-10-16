@@ -144,30 +144,35 @@ const Scenarios = (() => {
       fallbackBanner.style.display = isFallback ? 'flex' : 'none';
     }
 
-    container.innerHTML = recs.map((rec, i) => `
+    container.innerHTML = recs.map((rec, i) => {
+      const rationale = rec.qualitative_rationale || rec.why_it_may_help || '';
+      const tradeoffs = rec.practical_tradeoffs || '';
+      const steps = rec.action_steps || [];
+      const savings = Number.isFinite(rec.attached_savings_tonnes)
+        ? `<div class="rec-savings">🌿 ${rec.attached_savings_tonnes.toFixed(2)} t CO₂/yr saved <span class="badge badge-derived ml-auto" style="margin-left:auto">[Derived calculation]</span></div>`
+        : '';
+      return `
       <div class="rec-card" style="animation-delay:${i * 0.1}s">
         <div class="rec-card-header">
           <div>
-            <div class="rec-id">${rec.rec_id}</div>
+            <div class="rec-id">${rec.rec_id || `PRIORITY ${rec.priority || i + 1}`}</div>
             <div class="rec-card-title">${rec.title}</div>
           </div>
-          <span class="badge badge-${rec.difficulty.toLowerCase()}">${rec.difficulty} Effort</span>
+          <span class="badge badge-${(rec.difficulty || 'review').toLowerCase()}">${rec.difficulty || 'Review'}</span>
         </div>
-        <p class="rec-card-body">${rec.qualitative_rationale}</p>
+        <p class="rec-card-body">${rationale}${tradeoffs ? ` ${tradeoffs}` : ''}</p>
         <div class="rec-steps">
-          ${rec.action_steps.map((step, j) => `
+          ${steps.map((step, j) => `
             <div class="rec-step">
               <div class="rec-step-num">${j + 1}</div>
               <span>${step}</span>
             </div>
           `).join('')}
         </div>
-        <div class="rec-savings">
-          🌿 ${rec.attached_savings_tonnes.toFixed(2)} t CO₂/yr saved
-          <span class="badge badge-derived ml-auto" style="margin-left:auto">[Derived calculation]</span>
-        </div>
+        ${savings}
       </div>
-    `).join('');
+    `;
+    }).join('');
 
     // Switch to AI tab
     const aiTab = document.querySelector('[data-tab="6"]');

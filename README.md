@@ -1,5 +1,7 @@
 # CarboSync / TraceTwin: Campus Commute Emissions Intelligence Platform
 
+See [DEPLOYMENT.md](DEPLOYMENT.md) for the current hosting shape and deployment blockers. This is a preparation guide; the application is not cleared for public deployment with personal student data.
+
 > **Tagline:** See the traffic. Trace the carbon. Test the fix.
 
 [![Event](https://img.shields.io/badge/Event-DSU%20Code%20Clash%202.0-blue.svg)](https://github.com/ManojR-cs/CarboSync)
@@ -18,7 +20,7 @@ Universities generate significant indirect Scope 3 greenhouse gas (GHG) emission
 2. **Methodological Confusion:** Audits frequently confuse snapshot parking observations with total daily unique commuters, misapply passenger-level emission factors to vehicle-kilometres, or rely on unsupported extrapolations.
 3. **Inability to Test Interventions Before Implementation:** Campus administrators lack accessible "Digital Twin" simulation tools to evaluate the real-world carbon impact of policies—such as carpooling incentives, institutional shuttles, or hybrid schedule adjustments—prior to committing capital and operational resources.
 
-The PRD proposes addressing these challenges through the following workflow. The demo backend implements image detection, deterministic estimates, scenario comparisons, and guarded recommendation fallback; frontend, human review, environmental integrations, and a validated production emissions inventory remain unimplemented:
+The intended workflow is image analysis, commute activity estimates, scenario comparison, and grounded recommendations. The current repository includes a static CarbonSync dashboard, local YOLO image review, persistent 10-day observation campaigns, private student input forms, deterministic student commute and scenario estimates, report printing, and a guarded recommendation fallback. Emission factors remain provisional; no production inventory or parking-image accuracy claim is established:
 $$\text{Campus Parking Photos} \longrightarrow \text{Pretrained CV Detection} \longrightarrow \text{Human Verification} \longrightarrow \text{Deterministic Carbon Engine} \longrightarrow \text{Digital Twin Scenarios} \longrightarrow \text{Guarded AI Explanations}$$
 
 ### The Core Architectural Principle
@@ -90,12 +92,12 @@ All planning, architectural, and mathematical specifications are organized insid
 
 ## 5. Current Backend and Proposed Future Architecture
 
-> The B3 contract and the separate illustrative judges' demo backend are implemented. A local YOLO model and weights must be configured for live inference. Frontend and human review remain unimplemented.
+> The B3 contract and the separate illustrative demo backend are implemented. The current local setup includes a static frontend and a human-editable detection review canvas. Live inference requires the local YOLO model and weights. Evaluation on annotated overhead parking images remains outstanding.
 
 ```mermaid
 graph TD
-    UI[External React frontend; not included here] -->|REST API Requests| API[Backend: FastAPI Python 3.11/3.12]
-    API -->|Local optional inference| CV[YOLO11n service; local weights required]
+    UI[Static HTML/CSS/JavaScript CarbonSync frontend] -->|REST API Requests| API[Backend: FastAPI Python 3.11/3.12]
+    API -->|Local optional inference| CV[YOLO11x local baseline; exact weights required]
     API -->|Deterministic Calculations| ENG[Deterministic Carbon Engine]
     API -->|Illustrative deterministic scenarios| TWIN[Demo scenario engine]
     API -->|Optional guarded narrative| LLM[OpenAI-compatible provider or fallback]
@@ -104,7 +106,8 @@ graph TD
     UI -->|Visualization| CHARTS[Chart.js / Canvas Overlays]
 ```
 
-- **Frontend Client:** No frontend application source is present in this repository. An external React client can use the documented multipart and retrieval APIs; see [BACKEND_SETUP.md](BACKEND_SETUP.md). Older frontend architecture proposals are not implementation evidence.
+- **Local demo:** Start the frontend at `http://127.0.0.1:5500/` and the loopback-only API at `http://127.0.0.1:8001/`; the step-by-step commands are in [BACKEND_SETUP.md](BACKEND_SETUP.md). Student records are locally persisted; aggregate reports exclude names and home addresses. The recommendation service uses an explicit rule-based fallback when no supported LLM credentials are configured.
+- **Evidence limits:** The current YOLO11x model successfully loads, but its zero-detection output on one overhead parking sample demonstrates a limitation; parking accuracy must be measured on a held-out, manually annotated dataset before it is described as reliable. Commute factors remain illustrative and unapproved.
 - **Data Visualizations:** Chart.js for interactive emission breakdown charts and scenario comparisons; HTML5 Canvas for bounding box rendering and human verification.
 - **Backend Application Server:** Python 3.11 or 3.12 with FastAPI and Uvicorn. Provides asynchronous request handling, automated OpenAPI documentation, Pydantic type safety, and local Python ML integration.
 - **Computer Vision Pipeline:** An optional Ultralytics `.pt` service reads the configured model's class names instead of assuming custom weights use COCO IDs. The repository has no model weights; it does not download them. A missing model/runtime produces an actionable safe 503.

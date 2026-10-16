@@ -1,13 +1,33 @@
-# Portable Backend Setup and Frontend Handoff
+# CarbonSync Local Demo Setup
 
-This guide covers the existing FastAPI application. The repository does not include a React app. The backend contract in [`TraceTwin_Documentation/BACKEND.md`](TraceTwin_Documentation/BACKEND.md) is the source of truth for all API fields.
+This repository includes a static HTML/CSS/JavaScript frontend and the FastAPI backend. This guide starts both locally without adding a frontend framework. The backend contract in [`TraceTwin_Documentation/BACKEND.md`](TraceTwin_Documentation/BACKEND.md) documents the existing assessment APIs; the `/api/demo/*` routes also provide the local CarbonSync demo workflow.
 
 ## Supported local setup
 
 - Windows 10/11, 64-bit.
-- Python 3.11 or 3.12, 64-bit. The current automated suite was run with Python 3.12.14.
+- Python 3.11 or 3.12, 64-bit. The current local detector was verified with Python 3.11.7, Ultralytics 8.4.177, and CPU Torch 2.14.1.
 - The core API can start without Ultralytics or model weights. Real image inference requires the optional Ultralytics/PyTorch environment and a compatible local `.pt` weights file.
-- Dependencies used by the core API are pinned in `requirements.txt`. `requirements-yolo.txt` adds the bounded Ultralytics 8.3 series and its heavyweight inference dependencies.
+- Dependencies used by the core API are declared in `requirements.txt`. `requirements-yolo.txt` declares Ultralytics 8.4.177 and its heavyweight inference dependencies. Do not reinstall them when the existing runtime already works.
+
+## Start the existing local demo
+
+Use two PowerShell terminals from the repository root. The backend binds to loopback only, uses the local YOLO11x weights, and stores data in `carbosync.db` by default. The frontend uses port 5500 and calls the API on port 8001.
+
+Backend terminal:
+
+```powershell
+$env:CARBOSYNC_YOLO_MODEL_PATH = 'backend/models/yolo11x.pt'
+$env:CARBOSYNC_CORS_ORIGINS = 'http://127.0.0.1:5500,http://localhost:5500'
+py -3.11 -m uvicorn backend.main:app --host 127.0.0.1 --port 8001
+```
+
+Frontend terminal:
+
+```powershell
+py -3.11 -m http.server 5500 --bind 127.0.0.1 --directory frontend
+```
+
+Open [http://localhost:5500/](http://localhost:5500/). The API health endpoint is [http://127.0.0.1:8001/health](http://127.0.0.1:8001/health). The application uses the same persistent SQLite file across backend restarts. Keep both services on loopback; do not expose them on a public interface.
 
 ## Clone and install
 
@@ -59,10 +79,10 @@ notepad .env
 .\run_backend.ps1
 ```
 
-Then open [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs). The direct command, if you have already set the same environment variables in PowerShell, is:
+Then open [http://127.0.0.1:8001/docs](http://127.0.0.1:8001/docs). The direct command, if you have already set the same environment variables in PowerShell, is:
 
 ```powershell
-& '.\.venv\Scripts\python.exe' -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
+& '.\.venv\Scripts\python.exe' -m uvicorn backend.main:app --host 127.0.0.1 --port 8001
 ```
 
 ### Environment variables
@@ -70,23 +90,26 @@ Then open [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs). The direct c
 | Variable | Purpose | Example / default |
 |---|---|---|
 | `CARBOSYNC_DATABASE_PATH` | SQLite location, relative to repository root when relative | `carbosync.db` |
-| `CARBOSYNC_CORS_ORIGINS` | Comma-separated exact browser origins; no wildcard | `.env.example` shows common Vite origins on port 5173; replace them with the frontend's actual origin |
-| `CARBOSYNC_YOLO_MODEL_PATH` | Local Ultralytics PyTorch `.pt` weights path | `backend/models/yolo11n.pt` |
-| `CARBOSYNC_YOLO_CONFIDENCE` | Detection confidence threshold in `(0, 1]` | `0.35` |
+| `CARBOSYNC_CORS_ORIGINS` | Comma-separated exact browser origins; no wildcard | `.env.example` allows `http://127.0.0.1:5500` and `http://localhost:5500` |
+| `CARBOSYNC_YOLO_MODEL_PATH` | Local Ultralytics PyTorch `.pt` weights path | `backend/models/yolo11x.pt` |
+| `CARBOSYNC_YOLO_CONFIDENCE` | Detection confidence threshold in `(0, 1]` | `0.15` |
+| `CARBOSYNC_YOLO_IOU` | NMS IoU threshold in `(0, 1)` | `0.30` |
+| `CARBOSYNC_YOLO_IMAGE_SIZE` | Ultralytics inference image size | `1280` |
+| `CARBOSYNC_YOLO_NMS_MODE` | `class_aware` or `class_agnostic` | `class_aware` |
 | `CARBOSYNC_LLM_PROVIDER` | Optional provider selector | `openai_compatible`; blank uses fallback |
 | `CARBOSYNC_LLM_API_KEY` | Optional provider credential | Blank uses fallback; never commit a real key |
 | `CARBOSYNC_LLM_BASE_URL` | Optional OpenAI-compatible API base | `https://api.openai.com/v1` |
 | `CARBOSYNC_LLM_MODEL` | Optional provider model | `gpt-4o-mini` |
 
-The application accepts Ultralytics `.pt` weights only. The default expected file is `yolo11n.pt`; put it at `backend/models/yolo11n.pt`, or set `CARBOSYNC_YOLO_MODEL_PATH` to the local file. The model path can be absolute on each laptop and is never returned by an API response. Weights are ignored by Git. Obtain weights through the team's approved source and place them locally; the backend and setup scripts do not download them.
+The application accepts Ultralytics `.pt` weights only. The local baseline explicitly uses `backend/models/yolo11x.pt`; it does not fall back to another model or download weights. The configured model path can be absolute on each laptop and is never returned by an API response. Weights are ignored by Git. Obtain the exact weights through the team's approved source and place them locally. The local baseline settings (confidence `0.15`, IoU `0.30`, image size `1280`, class-aware NMS, CPU) are experimental and have not been tuned against a labeled parking dataset. The detector configuration and defaults live in `backend/vehicle_detection.py` and are shown in `.env.example`.
 
-The detector reads the configured model's actual class-name table. The standard COCO names `bicycle`, `car`, `motorcycle`, `bus`, and `truck` map to their matching categories; the standard COCO IDs are 1, 2, 3, 5, and 7 respectively. Custom weights may order class IDs differently. The response reports `class_mapping` as category-to-ID-lists and `unmapped_vehicle_categories`; a custom model must use recognized class names for categories to count. Unknown labels are ignored. The detector runs on CPU with the configured threshold and returns normalized box coordinates, confidence, counts, and an annotated JPEG data URI.
+The detector reads the configured model's actual class-name table. The standard COCO names `bicycle`, `car`, `motorcycle`, `bus`, and `truck` map to their matching categories; the standard COCO IDs are 1, 2, 3, 5, and 7 respectively. Custom weights may order class IDs differently. The response reports `class_mapping` as category-to-ID-lists and `unmapped_vehicle_categories`; a custom model must use recognized class names for categories to count. Unknown labels are ignored. The detector runs on CPU and returns normalized boxes, confidence, per-class counts, an explicit inference status, and an annotated JPEG data URI. Model metadata includes the weights SHA-256, recognized classes, runtime versions and effective settings, but never a local path.
 
 If Ultralytics or weights are missing, the API still starts. A real-mode analysis returns HTTP 503 with an actionable message to install the optional YOLO dependencies and configure compatible local weights. It does not fall back to fabricated results.
 
 ## Frontend integration
 
-Use `http://127.0.0.1:8000` as the local API base. Configure CORS with the exact origin shown in the React dev server (for example, `http://localhost:5173`). CORS origins must include the scheme and port. Do not use `*`; credentials are disabled.
+Use `http://127.0.0.1:8001` as the local API base for the included static frontend. CORS origins must include the scheme and port. Do not use `*`; credentials are disabled.
 
 The single analysis route is `POST /api/demo/analyze`. It accepts `multipart/form-data` with:
 
@@ -98,7 +121,7 @@ In real mode, omit `detection_mode` or set it to `real`. For a UI walkthrough wi
 Example React/browser client code (the `assumptions` object must use the complete schema linked above):
 
 ```js
-const API_BASE = "http://127.0.0.1:8000";
+const API_BASE = "http://127.0.0.1:8001";
 
 async function analyzeImage(file, assumptions, onLoading) {
   onLoading(true);
@@ -140,9 +163,11 @@ Abbreviated response excerpt from real mode. The detection array shown is partia
   "analysis_id": "demo_<generated-id>",
   "created_at": "<UTC timestamp>",
   "detection_mode": "real",
+  "inference_status": "completed_with_detections",
   "detections": {
     "mode": "real",
     "simulated": false,
+    "inference_status": "completed_with_detections",
     "per_class": {"bicycle": 3, "car": 10, "motorcycle": 2, "bus": 1, "truck": 1},
     "details": [{
       "class_id": 1,
@@ -159,12 +184,12 @@ Abbreviated response excerpt from real mode. The detection array shown is partia
     "bicycle_total": 3,
     "all_vehicle_total": 17,
     "observation_scope": "single_image_snapshot",
-    "model": "YOLO11n",
-    "confidence_threshold": 0.35,
+    "model": "yolo11x",
+    "confidence_threshold": 0.15,
     "class_mapping": {"bicycle": [1], "car": [2], "motorcycle": [3], "bus": [5], "truck": [7]},
     "unmapped_vehicle_categories": []
   },
-  "model": {"name": "YOLO11n", "confidence_threshold": 0.35, "detection_mode": "real", "simulated": false, "class_mapping": {"bicycle": [1], "car": [2], "motorcycle": [3], "bus": [5], "truck": [7]}, "unmapped_vehicle_categories": []},
+  "model": {"name": "yolo11x", "weights_sha256": "<64-character digest>", "task": "detect", "confidence_threshold": 0.15, "inference_status": "completed_with_detections", "inference_settings": {"confidence_threshold": 0.15, "iou_threshold": 0.3, "image_size": 1280, "nms_mode": "class_aware", "device": "cpu"}, "runtime_versions": {"python": "<version>", "ultralytics": "<version>", "torch": "<version>"}, "supported_classes": {"1": "bicycle", "2": "car", "3": "motorcycle", "5": "bus", "7": "truck"}, "class_mapping": {"bicycle": [1], "car": [2], "motorcycle": [3], "bus": [5], "truck": [7]}, "detection_mode": "real", "simulated": false},
   "detection_details": [{"class_id": 1, "category": "bicycle", "confidence": 0.88, "bounding_box_normalized": {"x_min": 0.02, "y_min": 0.1, "x_max": 0.3, "y_max": 0.6}}, {"class_id": 2, "category": "car", "confidence": 0.91, "bounding_box_normalized": {"x_min": 0.1, "y_min": 0.2, "x_max": 0.5, "y_max": 0.7}}],
   "annotated_image_data_uri": "data:image/jpeg;base64,...",
   "result": {

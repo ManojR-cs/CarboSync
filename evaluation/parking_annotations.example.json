@@ -1,0 +1,28 @@
+{
+  "info": {
+    "description": "CarbonSync parking vehicle annotations; example structure only",
+    "version": "1.0",
+    "guideline_version": "parking-boxes-v1",
+    "required_image_fields": [
+      "id",
+      "image_identifier",
+      "file_name",
+      "width",
+      "height",
+      "split",
+      "annotation_complete: true only after every visible supported vehicle is reviewed",
+      "location_id or capture_session_id",
+      "annotation_provenance: annotator, source, annotated_at, guideline_version"
+    ],
+    "annotation_bbox_format": "COCO pixel coordinates [x, y, width, height]"
+  },
+  "images": [],
+  "annotations": [],
+  "categories": [
+    {"id": 1, "name": "car"},
+    {"id": 2, "name": "motorcycle"},
+    {"id": 3, "name": "bicycle"},
+    {"id": 4, "name": "bus"},
+    {"id": 5, "name": "truck"}
+  ]
+}

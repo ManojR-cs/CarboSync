@@ -1,7 +1,7 @@
 param(
     [string]$PythonExe = ".\.venv\Scripts\python.exe",
     [string]$EnvFile = ".env",
-    [int]$Port = 8000
+    [int]$Port = 8001
 )
 
 $ErrorActionPreference = "Stop"

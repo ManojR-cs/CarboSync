@@ -52,6 +52,10 @@ def _estimate(
             minimum=0,
             maximum=300,
         )
+        if count > 0 and trips > 0 and distance == 0:
+            raise ValueError(
+                f"{category} avg_one_way_km must be greater than 0 when trips are estimated"
+            )
         value = _number(factor["value"], f"{category} factor", minimum=0, maximum=2)
         if factor["unit"] != FACTOR_UNIT:
             raise ValueError(f"{category} factor unit must be {FACTOR_UNIT}")
@@ -149,6 +153,10 @@ def calculate_demo_analysis(
     shuttle_distance = _number(
         shuttle["avg_one_way_km"], "shuttle avg_one_way_km", minimum=0, maximum=300
     )
+    if shuttle_vehicles > 0 and shuttle_trips > 0 and shuttle_distance == 0:
+        raise ValueError(
+            "shuttle avg_one_way_km must be greater than 0 when shuttle trips are estimated"
+        )
     shuttle_factor = _number(
         factors["bus"]["value"], "bus factor", minimum=0, maximum=2
     )
