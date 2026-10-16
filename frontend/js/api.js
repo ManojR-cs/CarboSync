@@ -105,12 +105,17 @@ class APIError extends Error {
 }
 
 // ── Connectivity Check ────────────────────────────────────────
-async function checkBackendStatus() {
-  if (window.USE_MOCKS) return 'mock';
+async function pingBackend() {
   try {
     const res = await fetch(`${API_BASE}/health`, { signal: AbortSignal.timeout(2000) });
-    return res.ok ? 'online' : 'error';
+    return res.ok;
   } catch {
-    return 'offline';
+    return false;
   }
+}
+
+async function checkBackendStatus() {
+  if (window.USE_MOCKS) return 'mock';
+  const isOnline = await pingBackend();
+  return isOnline ? 'online' : 'offline';
 }

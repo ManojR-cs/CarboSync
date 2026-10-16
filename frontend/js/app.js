@@ -5,7 +5,7 @@
  */
 
 // ── Global Config ──────────────────────────────────────────────
-window.USE_MOCKS = true;   // ← Set to false when backend is running
+window.USE_MOCKS = false;  // Auto-configured on boot: false when live backend is detected
 
 // ── Global State ──────────────────────────────────────────────
 const AppState = {
@@ -56,22 +56,28 @@ function switchTab(num) {
 }
 
 // ── Mock Toggle ────────────────────────────────────────────────
-function initMockToggle() {
+async function initMockToggle() {
   const checkbox = document.getElementById('mock-toggle');
   const badge    = document.getElementById('api-status-badge');
-  const dot      = document.getElementById('status-dot');
 
-  function update() {
-    window.USE_MOCKS = checkbox.checked;
-    if (badge) badge.textContent = USE_MOCKS ? 'Mock Mode' : 'Live API';
-    updateStatusIndicator(USE_MOCKS ? 'mock' : 'offline');
-  }
+  // Auto-detect live backend
+  const isOnline = await pingBackend();
+  window.USE_MOCKS = !isOnline;
 
   if (checkbox) {
     checkbox.checked = window.USE_MOCKS;
-    checkbox.addEventListener('change', update);
-    update();
+    checkbox.addEventListener('change', async () => {
+      window.USE_MOCKS = checkbox.checked;
+      const status = await checkBackendStatus();
+      updateStatusIndicator(status);
+      if (badge) badge.textContent = window.USE_MOCKS ? 'Mock Mode' : (status === 'online' ? 'Live API' : 'Offline');
+      showToast(window.USE_MOCKS ? 'Switched to Mock Mode' : 'Switched to Live API', 'info');
+    });
   }
+
+  const initialStatus = await checkBackendStatus();
+  updateStatusIndicator(initialStatus);
+  if (badge) badge.textContent = window.USE_MOCKS ? 'Mock Mode' : (initialStatus === 'online' ? 'Live API' : 'Offline');
 }
 
 async function checkStatus() {
@@ -184,6 +190,20 @@ function initImageUpload() {
     toggleImageView('annotated');
   });
 
+  // Sensitivity Slider
+  const confSlider = document.getElementById('cv-conf-slider');
+  const confVal = document.getElementById('cv-conf-val');
+  if (confSlider) {
+    confSlider.addEventListener('input', () => {
+      if (confVal) confVal.textContent = `${confSlider.value}%`;
+    });
+    confSlider.addEventListener('change', () => {
+      if (AppState.currentImageFile) {
+        handleImageFile(AppState.currentImageFile);
+      }
+    });
+  }
+
   // Confirm verification
   document.getElementById('confirm-verify-btn')?.addEventListener('click', confirmVerification);
 }
@@ -193,6 +213,7 @@ async function handleImageFile(file) {
     showToast('Invalid file. Please upload a JPEG or PNG image.', 'error');
     return;
   }
+  AppState.currentImageFile = file;
 
   // Show canvas loading
   const loading = document.getElementById('canvas-loading');
@@ -204,22 +225,29 @@ async function handleImageFile(file) {
   if (loading) loading.style.display = 'flex';
 
   try {
+    const confSlider = document.getElementById('cv-conf-slider');
+    const confidence = confSlider ? (parseFloat(confSlider.value) / 100.0) : 0.15;
+
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('confidence', confidence);
 
     const result = await API.uploadImage(AppState.assessmentId || 'ast_demo', formData);
     AppState.imageId = result.image_id;
 
-    // Load image on canvas with detections
-    const imgUrl = window.USE_MOCKS
-      ? URL.createObjectURL(file)
-      : `${API_BASE}/uploads/${result.image_id}`;
+    // Use local blob URL so image loads instantly without network re-download
+    const rawImgUrl = URL.createObjectURL(file);
+    AppState.rawImgUrl = rawImgUrl;
+    AppState.annotatedImgUrl = result.annotated_image_url
+      ? `${API_BASE}${result.annotated_image_url}`
+      : null;
 
-    CanvasEditor.loadImage(imgUrl, result.detections, result.width, result.height);
+    CanvasEditor.loadImage(rawImgUrl, result.detections, result.width, result.height, AppState.annotatedImgUrl);
     setEl('canvas-res', `${result.width}×${result.height}px`);
     setEl('canvas-det-count', `${result.detections.length} detected`);
 
-    showToast(`Detected ${result.detections.length} objects`, 'success');
+    const engineName = window.USE_MOCKS ? 'Mock Data' : 'Live YOLO11n + OpenCV';
+    showToast(`Detected ${result.detections.length} vehicles via ${engineName}`, 'success');
   } catch (err) {
     showToast(err.message, 'error');
     if (dropSection) dropSection.style.display = 'block';
@@ -265,6 +293,8 @@ function initCanvasPopupEvents() {
   const popupDelete = document.getElementById('popup-delete-btn');
   const popupClose  = document.getElementById('popup-close-btn');
 
+  const popupClose2 = document.getElementById('popup-close-btn2');
+
   popupSelect?.addEventListener('change', () => {
     CanvasEditor.reclassifySelected(popupSelect.value);
   });
@@ -274,9 +304,9 @@ function initCanvasPopupEvents() {
     document.getElementById('canvas-popup').classList.remove('visible');
   });
 
-  popupClose?.addEventListener('click', () => {
-    document.getElementById('canvas-popup').classList.remove('visible');
-  });
+  const closeFn = () => document.getElementById('canvas-popup')?.classList.remove('visible');
+  popupClose?.addEventListener('click', closeFn);
+  popupClose2?.addEventListener('click', closeFn);
 }
 
 function setActiveToolBtn(activeId) {
@@ -289,6 +319,11 @@ function toggleImageView(view) {
   ['view-raw-btn', 'view-annotated-btn'].forEach(id => {
     document.getElementById(id)?.classList.toggle('active', id === `view-${view}-btn`);
   });
+  if (view === 'annotated') {
+    CanvasEditor.setAnnotatedView(true, AppState.annotatedImgUrl);
+  } else {
+    CanvasEditor.setAnnotatedView(false);
+  }
 }
 
 // ── F-05: Commute Survey Form ──────────────────────────────────

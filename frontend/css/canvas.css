@@ -22,6 +22,13 @@
 .canvas-wrapper.cursor-crosshair { cursor: crosshair; }
 .canvas-wrapper.cursor-default { cursor: default; }
 
+.canvas-stage {
+  position: relative;
+  display: inline-block;
+  line-height: 0;
+  max-width: 100%;
+}
+
 #parking-canvas {
   display: block;
   max-width: 100%;
@@ -321,4 +328,14 @@
 @keyframes loadPulse {
   0%, 100% { opacity: 0.5; }
   50% { opacity: 1; }
+}
+
+/* ── Detections Inventory Table ───────────────────────────── */
+.det-table-row:hover {
+  background: rgba(56, 189, 248, 0.08) !important;
+}
+
+.det-table-row.table-active {
+  background: rgba(56, 189, 248, 0.16) !important;
+  box-shadow: inset 3px 0 0 var(--accent);
 }

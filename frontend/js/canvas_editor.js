@@ -67,12 +67,23 @@ const CanvasEditor = (() => {
   }
 
   // ── Load Image ─────────────────────────────────────────────
-  function loadImage(src, detectionData, width, height) {
+  let rawSrc = null;
+  let annotatedSrc = null;
+  let isAnnotatedMode = false;
+
+  function loadImage(src, detectionData, width, height, annotatedUrl = null) {
     imageObj = new Image();
-    imgW = width;
-    imgH = height;
+    rawSrc = src;
+    annotatedSrc = annotatedUrl;
+    isAnnotatedMode = false;
+    imgW = width || 0;
+    imgH = height || 0;
 
     imageObj.onload = () => {
+      if (!imgW || !imgH) {
+        imgW = imageObj.naturalWidth || 1920;
+        imgH = imageObj.naturalHeight || 1080;
+      }
       fitCanvas();
       drawAll();
     };
@@ -82,6 +93,25 @@ const CanvasEditor = (() => {
       detections = detectionData.map(d => ({ ...d }));
     }
     updateChips();
+  }
+
+  function setAnnotatedView(isAnnotated, annotatedUrl = null) {
+    if (annotatedUrl) annotatedSrc = annotatedUrl;
+    isAnnotatedMode = !!isAnnotated;
+
+    if (isAnnotatedMode && annotatedSrc) {
+      if (svgOverlay) svgOverlay.style.display = 'none';
+      const img = new Image();
+      img.onload = () => {
+        if (!ctx) return;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      };
+      img.src = annotatedSrc;
+    } else {
+      if (svgOverlay) svgOverlay.style.display = 'block';
+      drawAll();
+    }
   }
 
   function fitCanvas() {
@@ -136,64 +166,132 @@ const CanvasEditor = (() => {
       rect.setAttribute('y', sy);
       rect.setAttribute('width', sw);
       rect.setAttribute('height', sh);
-      rect.setAttribute('fill', 'transparent');
+      rect.setAttribute('fill', isSelected ? `${color}40` : 'rgba(0,0,0,0.001)');
       rect.setAttribute('stroke', color);
-      rect.setAttribute('stroke-width', isSelected ? 3 : 2);
+      rect.setAttribute('stroke-width', isSelected ? 3.5 : 2);
+      if (isSelected) {
+        rect.setAttribute('stroke-dasharray', '6,3');
+        rect.setAttribute('filter', `drop-shadow(0 0 8px ${color})`);
+      }
       rect.setAttribute('rx', 3);
       rect.setAttribute('data-id', det.detection_id);
       rect.style.cursor = 'pointer';
-      if (isSelected) rect.setAttribute('filter', `drop-shadow(0 0 6px ${color})`);
-      rect.addEventListener('click', (e) => { e.stopPropagation(); selectDetection(det.detection_id, e); });
+      rect.style.pointerEvents = 'all';
+      rect.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        selectDetection(det.detection_id, e);
+      });
       svgOverlay.appendChild(rect);
 
-      // Label bg
-      const labelText = det.category.split(' ')[0];
-      const labelW = Math.max(labelText.length * 6.5 + 8, 60);
+      // Label bg & text
+      const labelMap = {
+        'Cars': 'Car',
+        'Motorcycles and scooters': 'Motorcycle',
+        'Buses and campus shuttles': 'Bus',
+        'Other fuel-burning vehicles': 'Other',
+        'Bicycles': 'Bicycle'
+      };
+      const shortName = labelMap[det.category] || det.category.split(' ')[0];
+      const confPercent = Math.round(det.confidence * 100);
+      const labelText = `${shortName} ${confPercent}%`;
+      const labelW = Math.max(labelText.length * 7.2 + 14, 72);
       const labelH = 18;
       const lx = sx;
-      const ly = sy - labelH - 2;
+      const ly = (sy - labelH - 2 >= 0) ? (sy - labelH - 2) : (sy + 2);
 
-      if (ly >= 0) {
-        const labelBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-        labelBg.setAttribute('x', lx);
-        labelBg.setAttribute('y', ly);
-        labelBg.setAttribute('width', labelW);
-        labelBg.setAttribute('height', labelH);
-        labelBg.setAttribute('fill', color);
-        labelBg.setAttribute('opacity', '0.9');
-        labelBg.setAttribute('rx', 3);
-        svgOverlay.appendChild(labelBg);
+      const labelBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      labelBg.setAttribute('x', lx);
+      labelBg.setAttribute('y', ly);
+      labelBg.setAttribute('width', labelW);
+      labelBg.setAttribute('height', labelH);
+      labelBg.setAttribute('fill', color);
+      labelBg.setAttribute('opacity', '0.92');
+      labelBg.setAttribute('rx', 3);
+      labelBg.style.cursor = 'pointer';
+      labelBg.style.pointerEvents = 'all';
+      labelBg.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        selectDetection(det.detection_id, e);
+      });
+      svgOverlay.appendChild(labelBg);
 
-        const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        label.setAttribute('x', lx + 4);
-        label.setAttribute('y', ly + 12);
-        label.setAttribute('fill', '#0f172a');
-        label.setAttribute('font-size', '10');
-        label.setAttribute('font-weight', '700');
-        label.setAttribute('font-family', 'Inter, sans-serif');
-        label.textContent = `${labelText} ${Math.round(det.confidence * 100)}%`;
-        svgOverlay.appendChild(label);
-      }
+      const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      label.setAttribute('x', lx + 6);
+      label.setAttribute('y', ly + 13);
+      label.setAttribute('fill', '#0f172a');
+      label.setAttribute('font-size', '10.5');
+      label.setAttribute('font-weight', '700');
+      label.setAttribute('font-family', 'Inter, system-ui, sans-serif');
+      label.textContent = labelText;
+      label.style.cursor = 'pointer';
+      label.style.pointerEvents = 'all';
+      label.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        selectDetection(det.detection_id, e);
+      });
+      svgOverlay.appendChild(label);
 
-      // Drawing preview
-      if (drawRect && isDrawing) {
-        const pr = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-        const dx = Math.min(drawStart.x, drawRect.x);
-        const dy = Math.min(drawStart.y, drawRect.y);
-        const dw = Math.abs(drawRect.x - drawStart.x);
-        const dh = Math.abs(drawRect.y - drawStart.y);
-        pr.setAttribute('x', dx);
-        pr.setAttribute('y', dy);
-        pr.setAttribute('width', dw);
-        pr.setAttribute('height', dh);
-        pr.setAttribute('fill', 'rgba(56,189,248,0.1)');
-        pr.setAttribute('stroke', '#38bdf8');
-        pr.setAttribute('stroke-width', '2');
-        pr.setAttribute('stroke-dasharray', '5 3');
-        pr.setAttribute('rx', 3);
-        svgOverlay.appendChild(pr);
+      // Instant ✕ Delete Badge on top-right of selected box
+      if (isSelected) {
+        const btnX = sx + sw;
+        const btnY = sy;
+        const delCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        delCircle.setAttribute('cx', btnX);
+        delCircle.setAttribute('cy', btnY);
+        delCircle.setAttribute('r', 9);
+        delCircle.setAttribute('fill', '#ef4444');
+        delCircle.setAttribute('stroke', '#ffffff');
+        delCircle.setAttribute('stroke-width', '2');
+        delCircle.style.cursor = 'pointer';
+        delCircle.style.pointerEvents = 'all';
+        delCircle.setAttribute('title', 'Delete this detection');
+        delCircle.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          deleteDetectionById(det.detection_id);
+        });
+        svgOverlay.appendChild(delCircle);
+
+        const delText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        delText.setAttribute('x', btnX);
+        delText.setAttribute('y', btnY + 3.5);
+        delText.setAttribute('fill', '#ffffff');
+        delText.setAttribute('font-size', '11');
+        delText.setAttribute('font-weight', '900');
+        delText.setAttribute('text-anchor', 'middle');
+        delText.textContent = '✕';
+        delText.style.cursor = 'pointer';
+        delText.style.pointerEvents = 'all';
+        delText.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          deleteDetectionById(det.detection_id);
+        });
+        svgOverlay.appendChild(delText);
       }
     });
+
+    // Drawing preview outside loop
+    if (drawRect && isDrawing) {
+      const pr = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      const dx = Math.min(drawStart.x, drawRect.x);
+      const dy = Math.min(drawStart.y, drawRect.y);
+      const dw = Math.abs(drawRect.x - drawStart.x);
+      const dh = Math.abs(drawRect.y - drawStart.y);
+      pr.setAttribute('x', dx);
+      pr.setAttribute('y', dy);
+      pr.setAttribute('width', dw);
+      pr.setAttribute('height', dh);
+      pr.setAttribute('fill', 'rgba(56,189,248,0.15)');
+      pr.setAttribute('stroke', '#38bdf8');
+      pr.setAttribute('stroke-width', '2');
+      pr.setAttribute('stroke-dasharray', '5 3');
+      pr.setAttribute('rx', 3);
+      svgOverlay.appendChild(pr);
+    }
   }
 
   function drawBoxesOnCanvas() {
@@ -290,15 +388,17 @@ const CanvasEditor = (() => {
     if (!det) return;
 
     if (popup) {
-      // Position popup near click but within viewport
+      // Position popup near click or top-left of box
       const rect = canvas.getBoundingClientRect();
-      let px = (event.clientX - rect.left) + 12;
-      let py = (event.clientY - rect.top)  + 12;
+      const clickX = event ? (event.clientX - rect.left) : (det.box.x_min * scale);
+      const clickY = event ? (event.clientY - rect.top)  : (det.box.y_min * scale);
+      let px = clickX + 12;
+      let py = clickY + 12;
 
       // Clamp to canvas
-      const pw = 210, ph = 150;
-      if (px + pw > canvas.width)  px = canvas.width  - pw - 12;
-      if (py + ph > canvas.height) py = canvas.height - ph - 12;
+      const pw = 220, ph = 160;
+      px = Math.max(8, Math.min(px, canvas.width - pw - 8));
+      py = Math.max(8, Math.min(py, canvas.height - ph - 8));
 
       popup.style.left = px + 'px';
       popup.style.top  = py + 'px';
@@ -316,28 +416,149 @@ const CanvasEditor = (() => {
   }
 
   // ── Actions ────────────────────────────────────────────────
-  function deleteSelected() {
-    if (!selectedId) return;
-    detections = detections.filter(d => d.detection_id !== selectedId);
-    selectedId = null;
+  function deleteDetectionById(id) {
+    // If currently in annotated view, automatically return to interactive raw view
+    if (isAnnotatedMode) {
+      setAnnotatedView(false);
+      document.getElementById('view-raw-btn')?.classList.add('active');
+      document.getElementById('view-annotated-btn')?.classList.remove('active');
+    }
+
+    const victim = detections.find(d => d.detection_id === id);
+    const cat = victim ? victim.category : 'Object';
+    detections = detections.filter(d => d.detection_id !== id);
+    if (selectedId === id) selectedId = null;
     closePopup();
     updateChips();
+    renderDetectionsTable();
     renderSVGBoxes();
-    showToast('Detection removed', 'info');
+    if (typeof showToast === 'function') {
+      showToast(`Deleted ${cat} detection`, 'info');
+    }
+  }
+
+  function deleteSelected() {
+    if (isAnnotatedMode) {
+      setAnnotatedView(false);
+      document.getElementById('view-raw-btn')?.classList.add('active');
+      document.getElementById('view-annotated-btn')?.classList.remove('active');
+    }
+
+    if (!selectedId) {
+      if (detections.length === 0) {
+        if (typeof showToast === 'function') showToast('No vehicle detections to delete', 'info');
+        return;
+      }
+      // If user clicks toolbar delete without selecting a box, delete the most recently added or first
+      if (typeof showToast === 'function') {
+        showToast('Click a bounding box on the image or use the 🗑 button in the table below', 'info');
+      }
+      return;
+    }
+    deleteDetectionById(selectedId);
   }
 
   function reclassifySelected(newCategory) {
-    const det = detections.find(d => d.detection_id === selectedId);
+    if (!selectedId) return;
+    reclassifyDetection(selectedId, newCategory);
+  }
+
+  function reclassifyDetection(id, newCategory) {
+    const det = detections.find(d => d.detection_id === id);
     if (det) {
       det.category = newCategory;
       updateChips();
+      renderDetectionsTable();
       renderSVGBoxes();
+      if (popup && popup.classList.contains('visible') && selectedId === id && popupSelect) {
+        popupSelect.value = newCategory;
+      }
+    }
+  }
+
+  function highlightDetection(id, isHovered) {
+    const rect = svgOverlay?.querySelector(`rect[data-id="${id}"]`);
+    if (rect) {
+      if (isHovered) {
+        rect.setAttribute('stroke-width', '4');
+        rect.setAttribute('filter', 'drop-shadow(0 0 10px #38bdf8)');
+      } else if (id !== selectedId) {
+        rect.setAttribute('stroke-width', '2');
+        rect.removeAttribute('filter');
+      }
     }
   }
 
   function setMode(newMode) {
     mode = newMode;
     canvas.style.cursor = newMode === 'draw' ? 'crosshair' : 'default';
+  }
+
+  // ── Detections Table Rendering ─────────────────────────────
+  function renderDetectionsTable() {
+    const tbody = document.getElementById('detections-table-body');
+    const countEl = document.getElementById('detections-table-count');
+    if (countEl) countEl.textContent = detections.length;
+    if (!tbody) return;
+
+    if (detections.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5" class="text-muted text-center py-md">No vehicle detections active. Click "Draw Box" above to add one manually.</td></tr>`;
+      return;
+    }
+
+    const catEmoji = {
+      'Cars': '🚗',
+      'Motorcycles and scooters': '🏍️',
+      'Buses and campus shuttles': '🚌',
+      'Other fuel-burning vehicles': '🛺',
+      'Bicycles': '🚲'
+    };
+
+    tbody.innerHTML = detections.map((det, idx) => {
+      const color = categoryColor(det.category);
+      const emoji = catEmoji[det.category] || '🚗';
+      const pct = Math.round(det.confidence * 100);
+      const isSel = det.detection_id === selectedId;
+
+      const options = CATEGORIES.map(c => `
+        <option value="${c.name}" ${c.name === det.category ? 'selected' : ''}>${c.name}</option>
+      `).join('');
+
+      return `
+        <tr class="det-table-row ${isSel ? 'table-active' : ''}" 
+            data-id="${det.detection_id}"
+            style="cursor:pointer; transition:background var(--transition-fast);"
+            onmouseenter="CanvasEditor.highlightDetection('${det.detection_id}', true)"
+            onmouseleave="CanvasEditor.highlightDetection('${det.detection_id}', false)"
+            onclick="CanvasEditor.selectDetection('${det.detection_id}', event)">
+          <td style="font-family:var(--font-mono); font-weight:700; color:var(--text-muted);">#${idx + 1}</td>
+          <td>
+            <span style="display:inline-flex; align-items:center; gap:6px; font-weight:600; color:${color};">
+              <span>${emoji}</span> ${det.category}
+            </span>
+          </td>
+          <td>
+            <span style="font-family:var(--font-mono); font-size:0.8rem; background:rgba(255,255,255,0.06); padding:2px 8px; border-radius:4px; font-weight:700; color:var(--text-primary);">
+              ${pct}%
+            </span>
+          </td>
+          <td onclick="event.stopPropagation()">
+            <select style="width:100%; font-size:0.75rem; padding:3px 6px; background:var(--bg-card); border:1px solid var(--card-border); color:var(--text-primary); border-radius:var(--radius-sm);"
+                    onchange="CanvasEditor.reclassifyDetection('${det.detection_id}', this.value)">
+              ${options}
+            </select>
+          </td>
+          <td style="text-align:center;" onclick="event.stopPropagation()">
+            <button class="btn btn-danger btn-sm" 
+                    style="padding:3px 10px; font-size:0.75rem;"
+                    title="Delete vehicle detection"
+                    onclick="CanvasEditor.deleteDetectionById('${det.detection_id}')">
+              🗑 Delete
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join('');
   }
 
   // ── Summary Chips ──────────────────────────────────────────
@@ -372,6 +593,9 @@ const CanvasEditor = (() => {
     const totalEl = document.getElementById('chip-count-total');
     if (totalEl) totalEl.textContent = total;
 
+    // Update table
+    renderDetectionsTable();
+
     // Update app state
     if (window.AppState) AppState.cvCounts = counts;
   }
@@ -391,5 +615,21 @@ const CanvasEditor = (() => {
   function getDetections() { return [...detections]; }
 
   // ── Public API ─────────────────────────────────────────────
-  return { init, loadImage, deleteSelected, reclassifySelected, setMode, getVerifiedCounts, getDetections, updateChips, renderSVGBoxes };
+  return { 
+    init, 
+    loadImage, 
+    setAnnotatedView, 
+    deleteSelected, 
+    deleteDetectionById, 
+    reclassifySelected, 
+    reclassifyDetection, 
+    highlightDetection, 
+    selectDetection, 
+    setMode, 
+    getVerifiedCounts, 
+    getDetections, 
+    updateChips, 
+    renderSVGBoxes, 
+    renderDetectionsTable 
+  };
 })();
