@@ -28,7 +28,22 @@ The example `.env` targets this local static frontend. Keep the real `.env` file
 
 ## Optional image inference
 
-Real YOLO inference additionally needs a compatible Ultralytics/PyTorch installation and a model weights file obtained separately. Install the optional runtime with `.\setup_backend.ps1 -WithYolo`. Set `CARBOSYNC_YOLO_MODEL_PATH` in `.env` to the weights file. The API starts without either; real image analysis then returns an unavailable error instead of fake detections. Mock mode does not analyze uploaded images.
+Real YOLO inference additionally needs the optional Ultralytics/PyTorch runtime and a local model weights file. The checked-in `.env.example` points to `backend/models/yolo11x.pt`; a `yolo11n.pt` in the repository root will not satisfy that setting. Weights are intentionally excluded from Git.
+
+From the repository root, install the optional runtime:
+
+```powershell
+.\setup_backend.ps1 -WithYolo
+```
+
+To fetch the configured YOLO11x weights through Ultralytics, run:
+
+```powershell
+New-Item -ItemType Directory -Force backend\models | Out-Null
+.\.venv\Scripts\python.exe -c "from ultralytics import YOLO; YOLO('backend/models/yolo11x.pt')"
+```
+
+If you have `yolo11n.pt` instead, put it at `backend/models/yolo11n.pt` and set `CARBOSYNC_YOLO_MODEL_PATH=backend/models/yolo11n.pt` in your local `.env`. Use the same model file when comparing results; changing weights changes detections. The backend checks the configured path and reports inference as unavailable if the file is missing or Ultralytics is not installed. It does not invent detections. Mock mode does not analyze uploaded images.
 
 ## Tests and checks
 
