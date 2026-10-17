@@ -21,8 +21,11 @@ def get_database_path() -> Path:
     if raw_path is None:
         return DEFAULT_DATABASE_PATH
     if not raw_path.strip():
-        raise ValueError(f"{DATABASE_PATH_ENV} must not be empty")
-    return Path(raw_path).expanduser().resolve()
+        raise ValueError(f"{DATABASE_PATH_ENV} must not be empty; set it to a writable SQLite file path")
+    path = Path(raw_path).expanduser()
+    if not path.is_absolute():
+        path = DEFAULT_DATABASE_PATH.parent / path
+    return path.resolve()
 
 
 @contextmanager

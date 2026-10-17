@@ -1,8 +1,8 @@
 """Shared, reproducible local YOLO detection with bounded in-memory images.
 
-The configuration defaults preserve the local experimental baseline: YOLO11x,
-confidence 0.15, IoU 0.30, image size 1280, CPU, and class-aware NMS. These
-settings are not tuned or accuracy claims. Environment overrides are documented
+The defaults select YOLO11n, confidence 0.15, IoU 0.30, image size 640, CPU,
+and class-aware NMS for a modest live-demo footprint. These settings are not
+tuned or accuracy claims. Environment overrides are documented
 in `.env.example` and reported with each inference.
 """
 
@@ -41,6 +41,10 @@ class DetectionUnavailable(RuntimeError):
     """Model dependencies or explicitly configured weights are unavailable."""
 
 
+class DetectorInitializationFailed(RuntimeError):
+    """A present detector artifact could not be initialized safely."""
+
+
 class DetectionFailed(RuntimeError):
     """A loaded detector failed during inference; no valid result was produced."""
 
@@ -62,17 +66,18 @@ class DetectorConfig:
 def get_detector_config() -> DetectorConfig:
     """Read the one documented local detector configuration from environment."""
     project_root = Path(__file__).resolve().parent.parent
-    raw_path = os.getenv("CARBOSYNC_YOLO_MODEL_PATH", "backend/models/yolo11x.pt")
+    raw_path = os.getenv("CARBOSYNC_YOLO_MODEL_PATH", "backend/models/yolo11n.pt")
     model_path = Path(raw_path).expanduser()
     if not model_path.is_absolute():
         model_path = project_root / model_path
     try:
         confidence = float(os.getenv("CARBOSYNC_YOLO_CONFIDENCE", "0.15"))
         iou = float(os.getenv("CARBOSYNC_YOLO_IOU", "0.30"))
-        image_size = int(os.getenv("CARBOSYNC_YOLO_IMAGE_SIZE", "1280"))
+        image_size = int(os.getenv("CARBOSYNC_YOLO_IMAGE_SIZE", "640"))
     except (TypeError, ValueError) as exc:
         raise DetectionUnavailable("YOLO inference configuration is invalid.") from exc
     nms_mode = os.getenv("CARBOSYNC_YOLO_NMS_MODE", "class_aware").strip().lower()
+    device = os.getenv("CARBOSYNC_YOLO_DEVICE", "cpu").strip().lower()
     if not isfinite(confidence) or not 0 < confidence <= 1:
         raise DetectionUnavailable("YOLO confidence configuration is invalid.")
     if not isfinite(iou) or not 0 < iou < 1:
@@ -83,12 +88,15 @@ def get_detector_config() -> DetectorConfig:
         raise DetectionUnavailable("YOLO image size must be a multiple of 32.")
     if nms_mode not in {"class_aware", "class_agnostic"}:
         raise DetectionUnavailable("YOLO NMS configuration is invalid.")
+    if device not in {"cpu", "mps", "0", "1", "2", "3", "cuda:0", "cuda:1", "cuda:2", "cuda:3"}:
+        raise DetectionUnavailable("YOLO device must be cpu, mps, or a supported GPU index such as 0 or cuda:0.")
     return DetectorConfig(
         model_path=model_path.resolve(),
         confidence_threshold=confidence,
         iou_threshold=iou,
         image_size=image_size,
         nms_mode=nms_mode,
+        device=device,
     )
 
 
@@ -236,7 +244,7 @@ def _load_model():
         )
     if not path.is_file():
         raise DetectionUnavailable(
-            "Configured YOLO weights are unavailable. Set CARBOSYNC_YOLO_MODEL_PATH to an existing local .pt file."
+            "YOLO weights are unavailable. Run .\\setup_yolo.ps1 to install the optional model, or set CARBOSYNC_YOLO_MODEL_PATH to an existing readable .pt file."
         )
     try:
         weights_sha256 = _sha256_file(path)
@@ -258,10 +266,10 @@ def _load_model():
                 _loaded_model = YOLO(str(path))
                 names = getattr(_loaded_model, "names", None)
                 if names is None:
-                    raise DetectionUnavailable("Configured YOLO weights do not expose class names.")
+                    raise DetectorInitializationFailed("YOLO weights loaded but contain no class metadata.")
                 class_mapping = resolve_vehicle_class_ids(names)
                 if not class_mapping:
-                    raise DetectionUnavailable("Configured YOLO weights contain no supported vehicle classes.")
+                    raise DetectorInitializationFailed("YOLO weights loaded but contain no supported vehicle classes (bicycle, car, motorcycle, bus, truck).")
                 name_table = {}
                 items = names.items() if isinstance(names, dict) else enumerate(names)
                 for raw_id, label in items:
@@ -293,7 +301,7 @@ def _load_model():
                 }
                 _loaded_model_path = path
                 _loaded_model_sha256 = weights_sha256
-            except DetectionUnavailable:
+            except (DetectionUnavailable, DetectorInitializationFailed):
                 _loaded_model = None
                 _loaded_model_path = None
                 _loaded_model_sha256 = None
@@ -304,7 +312,7 @@ def _load_model():
                 _loaded_model_path = None
                 _loaded_model_sha256 = None
                 _loaded_model_metadata = None
-                raise DetectionUnavailable("Configured YOLO weights could not be loaded.") from exc
+                raise DetectorInitializationFailed("YOLO weights exist but could not be initialized by the installed Ultralytics/PyTorch runtime. Check model compatibility and requirements-yolo.txt.") from exc
         if _loaded_model_metadata is not None:
             _loaded_model_metadata["inference_settings"] = {
                 "confidence_threshold": config.confidence_threshold,

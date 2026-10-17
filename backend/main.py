@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import logging
 import os
 import uuid
 from datetime import date, timedelta
@@ -64,6 +65,7 @@ from backend.recommendations import generate_recommendations, generate_evidence_
 from backend.vehicle_detection import (
     DetectionFailed,
     DetectionUnavailable,
+    DetectorInitializationFailed,
     ImageInputError,
     MAX_IMAGE_BYTES,
     detect_vehicle_image,
@@ -537,9 +539,18 @@ async def detector_failed_handler(_, exc: DetectionFailed) -> JSONResponse:
     )
 
 
+@app.exception_handler(DetectorInitializationFailed)
+async def detector_initialization_failed_handler(_, exc: DetectorInitializationFailed) -> JSONResponse:
+    return JSONResponse(
+        status_code=503,
+        content={"error": True, "message": str(exc), "inference_status": "failed"},
+    )
+
+
 @app.exception_handler(Exception)
 async def unexpected_error_handler(_, exc: Exception) -> JSONResponse:
     """Return a safe stable response without exposing exception details."""
+    logging.getLogger("carbosync").exception("Unhandled API request failure")
     return JSONResponse(
         status_code=500,
         content={"error": True, "message": "An unexpected error occurred."},
@@ -553,6 +564,8 @@ def health() -> dict[str, object]:
         detector = {"status": "ready", **get_detector_metadata()}
     except DetectionUnavailable as exc:
         detector = {"status": "unavailable", "message": str(exc)}
+    except DetectorInitializationFailed as exc:
+        detector = {"status": "failed", "message": str(exc)}
     return {"status": "healthy", "detector": detector}
 
 

@@ -196,6 +196,20 @@ class DemoApiTests(unittest.TestCase):
         body, multipart_type = multipart_body(image, assumptions, content_type)
         return asyncio.run(asgi_request("/api/demo/analyze", body, multipart_type))
 
+    def test_empty_database_initializes_and_student_summary_endpoints_are_safe(self):
+        status, students, _ = asyncio.run(asgi_request("/api/demo/students", b"", "application/json", "GET"))
+        self.assertEqual(status, 200)
+        self.assertEqual(students["students"], [])
+        self.assertEqual(students["college_address"], "")
+        self.assertTrue(self.database_path.is_file())
+
+        status, summary, _ = asyncio.run(asgi_request("/api/demo/commute-summary", b"", "application/json", "GET"))
+        self.assertEqual(status, 200)
+        self.assertEqual(summary["student_count"], 0)
+        self.assertEqual(summary["calculation_status"], "unavailable")
+        self.assertIsNone(summary["annual_kg_co2"])
+        self.assertNotIn("students", summary)
+
     def test_valid_upload_calculates_scenarios_and_persists_retrievable_analysis(self):
         detection = DetectionResult(
             deepcopy(FIXTURE_COUNTS),
@@ -293,7 +307,7 @@ class DemoApiTests(unittest.TestCase):
         self.assertEqual(status, 503)
         self.assertTrue(body["error"])
         self.assertEqual(body["inference_status"], "unavailable")
-        self.assertIn("Configured YOLO weights are unavailable", body["message"])
+        self.assertIn("YOLO weights are unavailable", body["message"])
         self.assertNotIn(self.temp_directory.name, json.dumps(body))
         self.assertFalse(missing_path.exists(), "the service must not download weights")
 
@@ -628,7 +642,7 @@ class ImageValidationTests(unittest.TestCase):
         self.assertEqual(fake_model.predict.call_args.kwargs["device"], "cpu")
         self.assertFalse(fake_model.predict.call_args.kwargs["agnostic_nms"])
         self.assertEqual(fake_model.predict.call_args.kwargs["iou"], 0.30)
-        self.assertEqual(fake_model.predict.call_args.kwargs["imgsz"], 1280)
+        self.assertEqual(fake_model.predict.call_args.kwargs["imgsz"], 640)
 
     def test_successful_empty_inference_is_distinct_from_failure(self):
         import backend.vehicle_detection as detector_module

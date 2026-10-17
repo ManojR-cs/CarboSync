@@ -749,6 +749,18 @@ class CommuteApiTests(unittest.TestCase):
         self.assertEqual(response["status"], "healthy")
         self.assertEqual(response["detector"]["status"], "unavailable")
 
+    def test_health_distinguishes_broken_model_from_missing_optional_model(self) -> None:
+        from backend.vehicle_detection import DetectorInitializationFailed
+
+        with patch(
+            "backend.main.get_detector_metadata",
+            side_effect=DetectorInitializationFailed("YOLO weights could not be initialized."),
+        ):
+            status, response, _ = asyncio.run(asgi_request("GET", "/health"))
+        self.assertEqual(status, 200)
+        self.assertEqual(response["status"], "healthy")
+        self.assertEqual(response["detector"]["status"], "failed")
+
     def test_docs_route_remains_available(self) -> None:
         status, _, _ = asyncio.run(asgi_request("GET", "/docs"))
         self.assertEqual(status, 200)

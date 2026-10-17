@@ -44,10 +44,10 @@ class DetectorConfigurationTests(unittest.TestCase):
 
     def test_model_path_is_deterministic_and_relative_to_project(self):
         project_root = Path(detector.__file__).resolve().parent.parent
-        with patch.dict(os.environ, {"CARBOSYNC_YOLO_MODEL_PATH": "backend/models/yolo11x.pt"}):
+        with patch.dict(os.environ, {"CARBOSYNC_YOLO_MODEL_PATH": "backend/models/yolo11n.pt"}):
             config = get_detector_config()
-        self.assertEqual(config.model_path, (project_root / "backend/models/yolo11x.pt").resolve())
-        self.assertEqual(config.model_path.name, "yolo11x.pt")
+        self.assertEqual(config.model_path, (project_root / "backend/models/yolo11n.pt").resolve())
+        self.assertEqual(config.model_path.name, "yolo11n.pt")
 
     def test_missing_explicit_weights_do_not_fall_back(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -111,7 +111,7 @@ class DetectorConfigurationTests(unittest.TestCase):
                 patch.dict(os.environ, {"CARBOSYNC_YOLO_MODEL_PATH": str(weights)}),
                 patch.dict(sys.modules, {"ultralytics": SimpleNamespace(YOLO=MagicMock(side_effect=ValueError("private")))}),
             ):
-                with self.assertRaisesRegex(DetectionUnavailable, "weights could not be loaded"):
+                with self.assertRaisesRegex(detector.DetectorInitializationFailed, "could not be initialized"):
                     detector._load_model()
 
     def test_real_model_smoke_when_local_weights_are_available(self):

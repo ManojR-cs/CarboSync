@@ -1,23 +1,19 @@
-# Deployment readiness
+# Deployment notes
 
-The repository currently supports a local demo. The backend is **not safe to expose publicly** as-is:
+The repository contains no Render manifest, build configuration, or evidence about a currently attached Render disk. The historical paths `/var/data/carbosync.db` and `/var/data/yolo11x.pt` only work if the service is configured with a writable persistent disk mounted at `/var/data` and the weights are actually present there. Neither condition can be verified from this source checkout. No live deployment or inference has been verified as part of the repository changes.
 
-- There is no authentication or authorization.
-- `/api/demo/students` returns student names, IDs, and residential addresses, and the write endpoint accepts those records.
-- CORS does not protect these routes from direct HTTP callers.
-- There is no application-level rate limiting for uploads or writes.
-- SQLite persistence and detector weights are local/manual; a hosting environment needs durable storage and a controlled model-provisioning path.
-- Emission factors are illustrative or unapproved, and campus-image detection accuracy is not established.
+## Render configuration if deployment is retained
 
-Do not deploy the current full API to a public URL or enter real student data. No external deployment has been created.
+Before expecting persistent data or inference:
 
-## Required before public hosting
+1. In Render service settings, inspect whether a persistent disk is attached and record its actual mount path. If present and writable, set `CARBOSYNC_DATABASE_PATH` to a file under that mount, for example `/var/data/carbosync.db`. Use a single service instance/worker with SQLite; otherwise use a managed database.
+2. For detector inference, install `requirements-yolo.txt` in the deployment build and provision a compatible Ultralytics `.pt` file in the image or on durable storage. Set `CARBOSYNC_YOLO_MODEL_PATH` to its real path. Do not rely on an ephemeral instance filesystem or implicit server-start downloads. Health reports missing weights as `unavailable`; incompatibility/initialization errors report `failed`.
+3. Configure `CARBOSYNC_YOLO_DEVICE=cpu` unless a supported GPU is actually available. The default live-demo model choice is YOLO11n; YOLO11x is not selected or downloaded by default.
+4. Set `CARBOSYNC_CORS_ORIGINS` to exact trusted web origins. `CARBOSYNC_SERVE_FRONTEND=1` serves the checked-in static frontend from the API process when that is the intended layout.
+5. Verify health and real inference against an appropriate test image after deployment. A healthy API response alone does not confirm detector readiness.
 
-1. Remove the student-record workflow or add reviewed authentication, authorization, and data minimization. Confirm that no public route can return names, identifiers, or home addresses.
-2. Add request throttling and review file-upload limits, retention, and access policies.
-3. Decide whether this is a synthetic-only judging demo or a real-data product. For a public judging demo, seed synthetic records and disable all real student-data reads/writes.
-4. Choose a host, region, and durable database/model storage. SQLite on a local persistent disk requires a single service instance and worker; otherwise migrate to a managed database.
-5. Provision and verify the exact detector weights securely if real inference is part of the demo. Without that, keep inference explicitly unavailable or simulated and labelled.
-6. Set production CORS to exact trusted HTTPS origins, run the tests and smoke tests against the deployment, and verify health, data persistence, and error behavior.
+## Public data and security limitations
 
-After the public-data boundary is fixed, deployment needs the chosen hosting account/project and permission to connect this GitHub repository. Do not send provider secrets in chat or commit them; enter them in the host's secret manager.
+The API currently has unauthenticated student-record routes that can return names, IDs, and residential addresses. It also accepts writes and image uploads. Do not expose this application publicly or submit real student data until authorization, data minimization, retention, upload controls, and operational policies are implemented and reviewed. CORS is not an access-control system. Emission factors and results remain illustrative/unapproved.
+
+Pushing to the repository may trigger an external deployment depending on GitHub/Render settings. This repository contains no integration settings that establish whether auto-deploy is enabled. Inspect the Render dashboard before relying on deployment behavior. No deployment will be manually triggered by these code changes.
