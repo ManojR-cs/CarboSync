@@ -69,7 +69,12 @@ def get_detector_config() -> DetectorConfig:
     raw_path = os.getenv("CARBOSYNC_YOLO_MODEL_PATH", "backend/models/yolo11n.pt")
     model_path = Path(raw_path).expanduser()
     if not model_path.is_absolute():
-        model_path = project_root / model_path
+        resolved_path = project_root / model_path
+        if not resolved_path.is_file() and raw_path == "backend/models/yolo11n.pt":
+            root_candidate = project_root / model_path.name
+            if root_candidate.is_file():
+                resolved_path = root_candidate
+        model_path = resolved_path
     try:
         confidence = float(os.getenv("CARBOSYNC_YOLO_CONFIDENCE", "0.15"))
         iou = float(os.getenv("CARBOSYNC_YOLO_IOU", "0.30"))
@@ -393,9 +398,96 @@ def detect_vehicle_image(image: object, confidence_threshold: float | None = Non
                 "confidence": confidence_value,
                 "bounding_box_normalized": box,
             })
-        plotted = result.plot()
-        from PIL import Image
-        annotated = Image.fromarray(plotted[:, :, ::-1])
+        aerial_adapted = False
+        if not details:
+            # Aerial / top-down parking adaptation:
+            # Pretrained COCO weights lack bird's-eye parking lot training data, so
+            # overhead parked vehicles are commonly classified as 'cell phone', 'remote',
+            # or 'bottle'. When zero standard ground-level vehicles are detected, check
+            # if the model located rectangular objects matching car proportions.
+            overhead_class_names = {"cell phone", "remote", "bottle"}
+            overhead_ids = {
+                cid for cid, name in (actual_names.items() if isinstance(actual_names, dict) else enumerate(actual_names))
+                if str(name).strip().lower() in overhead_class_names
+            }
+            img_w, img_h = getattr(image, "size", (None, None))
+            if img_w is None and hasattr(image, "shape"):
+                img_h, img_w = image.shape[:2]
+            if not img_w or not img_h:
+                img_w, img_h = 1.0, 1.0
+            candidates = []
+            for class_id, confidence, coordinates in zip(class_ids, confidences, normalized_boxes):
+                class_id_int = int(class_id)
+                if class_id_int not in overhead_ids:
+                    continue
+                confidence_value = float(confidence)
+                if not isfinite(confidence_value) or confidence_value < 0.15:
+                    continue
+                x1, y1, x2, y2 = (float(v) for v in coordinates)
+                if not all(isfinite(v) for v in (x1, y1, x2, y2)):
+                    continue
+                box = {
+                    "x_min": max(0.0, min(1.0, x1)),
+                    "y_min": max(0.0, min(1.0, y1)),
+                    "x_max": max(0.0, min(1.0, x2)),
+                    "y_max": max(0.0, min(1.0, y2)),
+                }
+                w = box["x_max"] - box["x_min"]
+                h = box["y_max"] - box["y_min"]
+                if w <= 0 or h <= 0:
+                    continue
+                px_w = w * img_w
+                px_h = h * img_h
+                ratio = max(px_w, px_h) / max(1.0, min(px_w, px_h))
+                area = w * h
+                if 1.3 <= ratio <= 4.0 and 0.003 <= area <= 0.20:
+                    candidates.append({"confidence": confidence_value, "box": box})
+
+            suppressed = []
+            for cand in sorted(candidates, key=lambda c: c["confidence"], reverse=True):
+                box_a = cand["box"]
+                overlap = False
+                for existing in suppressed:
+                    box_b = existing["box"]
+                    ix_min, iy_min = max(box_a["x_min"], box_b["x_min"]), max(box_a["y_min"], box_b["y_min"])
+                    ix_max, iy_max = min(box_a["x_max"], box_b["x_max"]), min(box_a["y_max"], box_b["y_max"])
+                    if ix_max > ix_min and iy_max > iy_min:
+                        inter = (ix_max - ix_min) * (iy_max - iy_min)
+                        area_a = (box_a["x_max"] - box_a["x_min"]) * (box_a["y_max"] - box_a["y_min"])
+                        area_b = (box_b["x_max"] - box_b["x_min"]) * (box_b["y_max"] - box_b["y_min"])
+                        if inter / max(1e-6, area_a + area_b - inter) > 0.4:
+                            overlap = True
+                            break
+                if not overlap:
+                    suppressed.append(cand)
+
+            if suppressed:
+                aerial_adapted = True
+                for cand in suppressed:
+                    counts["car"] += 1
+                    details.append({
+                        "class_id": 2,
+                        "category": "car",
+                        "confidence": cand["confidence"],
+                        "bounding_box_normalized": cand["box"],
+                    })
+
+        from PIL import Image, ImageDraw
+        if aerial_adapted and hasattr(image, "copy"):
+            annotated = image.copy()
+            draw = ImageDraw.Draw(annotated)
+            w_img, h_img = annotated.size
+            for d in details:
+                b = d["bounding_box_normalized"]
+                draw.rectangle(
+                    [b["x_min"] * w_img, b["y_min"] * h_img, b["x_max"] * w_img, b["y_max"] * h_img],
+                    outline=(0, 204, 102),
+                    width=max(2, round(w_img / 250)),
+                )
+        else:
+            plotted = result.plot()
+            annotated = Image.fromarray(plotted[:, :, ::-1])
+
         annotated.thumbnail((2048, 2048))
         buffer = BytesIO()
         annotated.save(buffer, format="JPEG", quality=85, optimize=True)

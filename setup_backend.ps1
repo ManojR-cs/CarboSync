@@ -32,15 +32,21 @@ if ($PythonExe) {
         $launcher = Get-Command py -ErrorAction SilentlyContinue
         if ($launcher) {
             foreach ($version in @('3.12', '3.11')) {
-                & $launcher.Source "-$version" -c 'import sys; print(sys.version_info.minor)' 2>$null | Out-Null
-                if ($LASTEXITCODE -eq 0) { $basePython = $launcher.Source; $prefix = @("-$version"); break }
+                try {
+                    $testMinor = & $launcher.Source "-$version" -c 'import sys; print(sys.version_info.minor)' 2>&1
+                    if ($LASTEXITCODE -eq 0 -and "$testMinor" -match '^\d+$') {
+                        $basePython = $launcher.Source
+                        $prefix = @("-$version")
+                        break
+                    }
+                } catch {}
             }
         }
         if (-not $basePython) {
             $pythonCommand = Get-Command python -ErrorAction SilentlyContinue
             if ($pythonCommand) {
                 $candidate = $pythonCommand.Source
-                $version = & $candidate -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>$null
+                $version = & $candidate -c 'import sys; print(sys.version_info.major, sys.version_info.minor, sep=chr(46))' 2>$null
                 if ($LASTEXITCODE -eq 0 -and $version -match '^3\.(11|12)$') { $basePython = $candidate }
             }
         }
@@ -56,7 +62,7 @@ if ($PythonExe) {
             }
             throw 'Python 3.11 or 3.12 was not found. Install 64-bit Python 3.12 from https://www.python.org/downloads/ and rerun this script. No project files were changed.'
         }
-        $version = Invoke-Python $basePython $prefix @('-c', 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+        $version = Invoke-Python $basePython $prefix @('-c', 'import sys; print(sys.version_info.major, sys.version_info.minor, sep=chr(46))')
         if ($version -notmatch '^3\.(11|12)$') { throw "Python 3.11 or 3.12 is required; found $version." }
         Invoke-Python $basePython $prefix @('-m', 'venv', (Join-Path $projectRoot '.venv'))
         $basePython = $venvPython
@@ -64,7 +70,7 @@ if ($PythonExe) {
     }
 }
 
-$version = Invoke-Python $basePython $prefix @('-c', 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+$version = Invoke-Python $basePython $prefix @('-c', 'import sys; print(sys.version_info.major, sys.version_info.minor, sep=chr(46))')
 if ($version -notmatch '^3\.(11|12)$') { throw "Python 3.11 or 3.12 is required; found $version." }
 
 if (-not $SkipInstall) {

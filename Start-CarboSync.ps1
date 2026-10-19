@@ -5,7 +5,9 @@ Set-Location -LiteralPath $projectRoot
 try {
     $python = Join-Path $projectRoot '.venv\Scripts\python.exe'
     if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
-        & (Join-Path $projectRoot 'setup_backend.ps1')
+        $hasYolo = (Test-Path (Join-Path $projectRoot 'backend\models\yolo11n.pt')) -or (Test-Path (Join-Path $projectRoot 'yolo11n.pt'))
+        $setupArgs = if ($hasYolo) { @('-WithYolo') } else { @() }
+        & (Join-Path $projectRoot 'setup_backend.ps1') @setupArgs
     }
 
     $envFile = Join-Path $projectRoot '.env'

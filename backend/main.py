@@ -330,7 +330,7 @@ def configured_cors_origins(raw_origins: str | None = None) -> list[str]:
     value = (
         os.getenv(
             "CARBOSYNC_CORS_ORIGINS",
-            "http://localhost:5500,http://127.0.0.1:5500,http://localhost:8000,http://127.0.0.1:8000,http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173",
+            "http://localhost:5500,http://127.0.0.1:5500,http://localhost:8000,http://127.0.0.1:8000,http://localhost:8001,http://127.0.0.1:8001,http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173",
         )
         if raw_origins is None
         else raw_origins
@@ -1180,11 +1180,12 @@ async def analyze_demo_image(
     if len(image_bytes) > MAX_IMAGE_BYTES:
         raise HTTPException(status_code=413, detail="Image exceeds size limit")
     image_sha256 = hashlib.sha256(image_bytes).hexdigest()
+    duplicate_campaign_image = False
     if observation_campaign_id:
         if get_observation_campaign(observation_campaign_id) is None:
             raise HTTPException(status_code=404, detail="Campaign not found")
         if has_parking_image(observation_campaign_id, image_sha256):
-            raise HTTPException(status_code=409, detail="This image has already been saved in this campaign")
+            duplicate_campaign_image = True
     try:
         validated_image = validate_image_bytes(image_bytes, content_type)
     except ImageInputError as exc:
@@ -1209,6 +1210,8 @@ async def analyze_demo_image(
         warnings = [
             "Simulated mode was selected; the uploaded image was not analyzed."
         ]
+        if duplicate_campaign_image:
+            warnings.append("This image has already been saved in this campaign.")
     else:
         detections = await run_in_threadpool(
             detect_vehicle_image,
@@ -1228,6 +1231,8 @@ async def analyze_demo_image(
         }
         annotated_image_data_uri = detections.annotated_image_data_uri
         warnings = []
+        if duplicate_campaign_image:
+            warnings.append("This image has already been saved in this campaign.")
         if detections.unmapped_vehicle_categories:
             warnings.append(
                 "The configured model does not contain every supported vehicle class; "
